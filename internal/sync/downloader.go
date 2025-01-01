@@ -90,6 +90,37 @@ func (ds *DownloadStats) AddBytes(n int64) {
 	ds.mu.Unlock()
 }
 
+// IncrementDownloadsAndActive increments the total and active download counts together.
+func (ds *DownloadStats) IncrementDownloadsAndActive() {
+	ds.mu.Lock()
+	ds.TotalDownloads++
+	ds.ActiveDownloads++
+	ds.mu.Unlock()
+}
+
+// DecrementActiveDownloads decrements the active download count by 1.
+func (ds *DownloadStats) DecrementActiveDownloads() {
+	ds.mu.Lock()
+	ds.ActiveDownloads--
+	ds.mu.Unlock()
+}
+
+// IncrementFailedDownloads increments the failed download count by 1.
+func (ds *DownloadStats) IncrementFailedDownloads() {
+	ds.mu.Lock()
+	ds.FailedDownloads++
+	ds.mu.Unlock()
+}
+
+// CompleteDownload updates all completion-related fields together.
+func (ds *DownloadStats) CompleteDownload(bytes int64, duration time.Duration) {
+	ds.mu.Lock()
+	ds.CompletedDownloads++
+	ds.BytesDownloaded += bytes
+	ds.TotalDuration += duration
+	ds.mu.Unlock()
+}
+
 // DownloadManagerConfig contains configuration for the download manager.
 type DownloadManagerConfig struct {
 	TempDir         string
@@ -291,16 +322,8 @@ func (dm *DownloadManager) DownloadFile(ctx context.Context, file *state.File) e
 	defer dm.activeDownloads.Delete(file.ID)
 
 	// Update stats
-	dm.downloadStats.mu.Lock()
-	dm.downloadStats.TotalDownloads++
-	dm.downloadStats.ActiveDownloads++
-	dm.downloadStats.mu.Unlock()
-
-	defer func() {
-		dm.downloadStats.mu.Lock()
-		dm.downloadStats.ActiveDownloads--
-		dm.downloadStats.mu.Unlock()
-	}()
+	dm.downloadStats.IncrementDownloadsAndActive()
+	defer dm.downloadStats.DecrementActiveDownloads()
 
 	// Perform download
 	if file.IsGoogleDoc {
@@ -310,9 +333,7 @@ func (dm *DownloadManager) DownloadFile(ctx context.Context, file *state.File) e
 	}
 
 	if err != nil {
-		dm.downloadStats.mu.Lock()
-		dm.downloadStats.FailedDownloads++
-		dm.downloadStats.mu.Unlock()
+		dm.downloadStats.IncrementFailedDownloads()
 		return err
 	}
 
@@ -335,11 +356,7 @@ func (dm *DownloadManager) DownloadFile(ctx context.Context, file *state.File) e
 	}
 
 	// Update stats
-	dm.downloadStats.mu.Lock()
-	dm.downloadStats.CompletedDownloads++
-	dm.downloadStats.BytesDownloaded += file.Size
-	dm.downloadStats.TotalDuration += time.Since(downloadInfo.StartTime)
-	dm.downloadStats.mu.Unlock()
+	dm.downloadStats.CompleteDownload(file.Size, time.Since(downloadInfo.StartTime))
 
 	return nil
 }
@@ -476,7 +493,7 @@ func (dm *DownloadManager) downloadWithResume(
 			case <-time.After(time.Duration(retries) * time.Second):
 				continue
 			case <-ctx.Done():
-				return errors.Wrap(ctx.Err(), "download cancelled")
+				return errors.Wrap(ctx.Err(), "download canceled")
 			}
 		}
 
@@ -644,9 +661,15 @@ func (dm *DownloadManager) cleanupTempFiles() error {
 		return nil
 	}
 
-	// Create temp directory if it doesn't exist.
-	if err := os.MkdirAll(dm.tempDir, 0750); err != nil {
-		return errors.Wrap(err, "failed to create temp directory")
+	info, err := os.Stat(dm.tempDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return errors.Wrap(err, "failed to stat temp directory")
+	}
+	if !info.IsDir() {
+		return nil
 	}
 
 	// Read all files in temp directory.

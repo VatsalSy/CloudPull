@@ -98,9 +98,9 @@ func (app *App) Initialize() error {
 	var output io.Writer = os.Stdout
 	outputPath := cfg.GetString("log.output")
 	if outputPath != "" && outputPath != "stdout" {
-		file, err := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-		if err != nil {
-			return errors.Wrap(err, "failed to open log file")
+		file, fileErr := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if fileErr != nil {
+			return errors.Wrap(fileErr, "failed to open log file")
 		}
 		output = file
 	}
@@ -443,7 +443,9 @@ func (app *App) StartSync(ctx context.Context, folderID, outputDir string, optio
 	case <-ctx.Done():
 		// Context canceled (user interrupt)
 		app.logger.Info("Sync canceled")
-		app.syncEngine.Stop()
+		if err := app.syncEngine.Stop(); err != nil {
+			app.logger.Error(err, "Failed to stop sync engine")
+		}
 	}
 
 	app.mu.Lock()
@@ -493,7 +495,9 @@ func (app *App) StartSyncWithSession(ctx context.Context, folderID, outputDir st
 		case <-ctx.Done():
 			// Context canceled (user interrupt)
 			app.logger.Info("Sync canceled")
-			app.syncEngine.Stop()
+			if err := app.syncEngine.Stop(); err != nil {
+				app.logger.Error(err, "Failed to stop sync engine")
+			}
 		}
 
 		app.mu.Lock()
@@ -544,7 +548,9 @@ func (app *App) ResumeSync(ctx context.Context, sessionID string) error {
 	case <-ctx.Done():
 		// Context canceled (user interrupt)
 		app.logger.Info("Sync canceled")
-		app.syncEngine.Stop()
+		if err := app.syncEngine.Stop(); err != nil {
+			app.logger.Error(err, "Failed to stop sync engine")
+		}
 	}
 
 	app.mu.Lock()

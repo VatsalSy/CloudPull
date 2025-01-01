@@ -508,7 +508,7 @@ func convertToActiveSession(session *state.Session) ActiveSession {
 }
 
 // isTerminalStatus returns true if the session status represents a terminal state
-// (completed, failed, or cancelled).
+// (completed, failed, or canceled).
 func isTerminalStatus(status string) bool {
 	return status == state.SessionStatusCompleted ||
 		status == state.SessionStatusFailed ||

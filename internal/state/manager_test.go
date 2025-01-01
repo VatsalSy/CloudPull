@@ -328,7 +328,7 @@ func TestManager_MarkFileFailed(t *testing.T) {
 	assert.Equal(t, initialProgress.FailedFiles+1, finalProgress.FailedFiles, "FailedFiles count did not increment")
 
 	var errorLog []state.ErrorLog
-	err = manager.DB().SelectContext(ctx, &errorLog, "SELECT * FROM error_log WHERE session_id = $1 AND item_id = $2", session.ID, fileToFail.ID)
+	err = manager.DB().SelectContext(ctx, &errorLog, "SELECT * FROM error_log WHERE session_id = ? AND item_id = ?", session.ID, fileToFail.ID)
 	require.NoError(t, err, "Failed to query error_log")
 	require.Len(t, errorLog, 1, "Expected one entry in error_log")
 	assert.Equal(t, fileToFail.ID, errorLog[0].ItemID)
@@ -354,9 +354,8 @@ func TestManager_LogError(t *testing.T) {
 	require.NoError(t, err, "manager.LogError itself failed")
 
 	var loggedErrors []state.ErrorLog
-	// Using $1, $2 for SQLite placeholders, as sqlx often uses ? internally but then rebinds.
-	// Standard Go database/sql uses $n for Postgres, ? for MySQL/SQLite. sqlx should handle this.
-	query := "SELECT * FROM error_log WHERE session_id = $1 AND item_id = $2 AND error_type = $3"
+	// Use `?` placeholders for SQLite.
+	query := "SELECT * FROM error_log WHERE session_id = ? AND item_id = ? AND error_type = ?"
 	err = manager.DB().SelectContext(ctx, &loggedErrors, query, session.ID, testFileID, testErrorType)
 	require.NoError(t, err, "Failed to query error_log table")
 	require.Len(t, loggedErrors, 1, "Expected exactly one error log entry")

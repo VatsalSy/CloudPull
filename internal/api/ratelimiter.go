@@ -352,8 +352,8 @@ func (mtrl *MultiTenantRateLimiter) GetLimiter(tenantID string) *RateLimiter {
 	defer mtrl.mu.Unlock()
 
 	// Double-check after acquiring write lock
-	if limiter, exists := mtrl.limiters[tenantID]; exists {
-		return limiter
+	if existingLimiter, exists := mtrl.limiters[tenantID]; exists {
+		return existingLimiter
 	}
 
 	limiter = NewRateLimiter(mtrl.defaultConfig)

@@ -99,7 +99,7 @@ func (m *Manager) LogError(ctx context.Context, sessionID, itemID, itemType, err
     INSERT INTO error_log (
       session_id, item_id, item_type, error_type,
       error_code, error_message, stack_trace, is_retryable
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, dbErr := m.db.ExecContext(ctx, query,
 		sessionID, itemID, itemType, errorType,
@@ -141,7 +141,7 @@ func (m *Manager) MarkFileComplete(ctx context.Context, fileID, sessionID string
 	return m.db.WithTx(ctx, func(tx *sqlx.Tx) error {
 		// Get file info
 		var size int64
-		err := tx.GetContext(ctx, &size, "SELECT size FROM files WHERE id = $1", fileID)
+		err := tx.GetContext(ctx, &size, "SELECT size FROM files WHERE id = ?", fileID)
 		if err != nil {
 			return fmt.Errorf("failed to get file size: %w", err)
 		}
@@ -195,8 +195,8 @@ func (m *Manager) GetNextPendingFile(ctx context.Context, sessionID string) (*Fi
 	// First check for partially downloaded files
 	query := `
     SELECT * FROM files
-    WHERE session_id = $1
-      AND status = $2
+    WHERE session_id = ?
+      AND status = ?
       AND bytes_downloaded > 0
     ORDER BY bytes_downloaded DESC
     LIMIT 1`
@@ -212,8 +212,8 @@ func (m *Manager) GetNextPendingFile(ctx context.Context, sessionID string) (*Fi
 	// Then get next pending file (smallest first)
 	query = `
     SELECT * FROM files
-    WHERE session_id = $1
-      AND status = $2
+    WHERE session_id = ?
+      AND status = ?
     ORDER BY size ASC
     LIMIT 1`
 
@@ -232,8 +232,8 @@ func (m *Manager) GetNextPendingFile(ctx context.Context, sessionID string) (*Fi
 func (m *Manager) GetNextPendingFolder(ctx context.Context, sessionID string) (*Folder, error) {
 	query := `
     SELECT * FROM folders
-    WHERE session_id = $1
-      AND status = $2
+    WHERE session_id = ?
+      AND status = ?
     ORDER BY path
     LIMIT 1`
 
@@ -269,8 +269,8 @@ func (m *Manager) ResumeSession(ctx context.Context, sessionID string) error {
 		// Reset failed folders
 		query := `
       UPDATE folders
-      SET status = $1, error_message = NULL
-      WHERE session_id = $2 AND status = $3`
+      SET status = ?, error_message = NULL
+      WHERE session_id = ? AND status = ?`
 
 		_, err = tx.ExecContext(ctx, query, FolderStatusPending, sessionID, FolderStatusFailed)
 		if err != nil {
@@ -353,7 +353,7 @@ func (m *Manager) Vacuum(ctx context.Context) error {
 // GetConfig retrieves a configuration value.
 func (m *Manager) GetConfig(ctx context.Context, key string) (string, error) {
 	var value string
-	query := `SELECT value FROM config WHERE key = $1`
+	query := `SELECT value FROM config WHERE key = ?`
 
 	err := m.db.GetContext(ctx, &value, query, key)
 	if err != nil {
@@ -369,8 +369,8 @@ func (m *Manager) GetConfig(ctx context.Context, key string) (string, error) {
 // SetConfig sets a configuration value.
 func (m *Manager) SetConfig(ctx context.Context, key, value string) error {
 	query := `
-    INSERT INTO config (key, value) VALUES ($1, $2)
-    ON CONFLICT(key) DO UPDATE SET value = $2`
+    INSERT INTO config (key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value`
 
 	_, err := m.db.ExecContext(ctx, query, key, value)
 	if err != nil {
@@ -467,16 +467,16 @@ func (m *Manager) UpdateFileStatus(ctx context.Context, file *File) error {
 func (m *Manager) GetPendingFiles(ctx context.Context, sessionID string, limit int) ([]*File, error) {
 	query := `
     SELECT * FROM files
-    WHERE session_id = $1
-      AND status IN ($2, $3)
+    WHERE session_id = ?
+      AND status IN (?, ?)
     ORDER BY
-      CASE WHEN status = $3 THEN 0 ELSE 1 END,
+      CASE WHEN status = ? THEN 0 ELSE 1 END,
       size ASC
-    LIMIT $4`
+    LIMIT ?`
 
 	var files []*File
 	err := m.db.SelectContext(ctx, &files, query,
-		sessionID, FileStatusPending, FileStatusDownloading, limit)
+		sessionID, FileStatusPending, FileStatusDownloading, FileStatusDownloading, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pending files: %w", err)
 	}

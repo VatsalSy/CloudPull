@@ -12,6 +12,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -27,22 +28,26 @@ func Example() {
 	// Create application instance
 	app, err := New()
 	if err != nil {
-		log.Fatal("Failed to create app:", err)
+		log.Printf("Failed to create app: %v", err)
+		return
 	}
 
 	// Initialize application
 	if err := app.Initialize(); err != nil {
-		log.Fatal("Failed to initialize app:", err)
+		log.Printf("Failed to initialize app: %v", err)
+		return
 	}
 
 	// Initialize authentication
 	if err := app.InitializeAuth(); err != nil {
-		log.Fatal("Failed to initialize auth:", err)
+		log.Printf("Failed to initialize auth: %v", err)
+		return
 	}
 
 	// Initialize sync engine
 	if err := app.InitializeSyncEngine(); err != nil {
-		log.Fatal("Failed to initialize sync engine:", err)
+		log.Printf("Failed to initialize sync engine: %v", err)
+		return
 	}
 
 	// Create context with cancellation
@@ -73,7 +78,7 @@ func Example() {
 		}
 
 		if err := app.StartSync(syncCtx, "root", "~/CloudPull/MyDrive", options); err != nil {
-			if err == context.DeadlineExceeded {
+			if errors.Is(err, context.DeadlineExceeded) {
 				log.Printf("Sync timed out after 5 minutes")
 			} else {
 				log.Printf("Sync failed: %v", err)
@@ -110,20 +115,24 @@ func ExampleResumeSession() {
 	// Create application instance with proper error handling
 	app, err := New()
 	if err != nil {
-		log.Fatal("Failed to create app:", err)
+		log.Printf("Failed to create app: %v", err)
+		return
 	}
 
 	// Initialize application components with error checking
 	if err := app.Initialize(); err != nil {
-		log.Fatal("Failed to initialize app:", err)
+		log.Printf("Failed to initialize app: %v", err)
+		return
 	}
 
 	if err := app.InitializeAuth(); err != nil {
-		log.Fatal("Failed to initialize auth:", err)
+		log.Printf("Failed to initialize auth: %v", err)
+		return
 	}
 
 	if err := app.InitializeSyncEngine(); err != nil {
-		log.Fatal("Failed to initialize sync engine:", err)
+		log.Printf("Failed to initialize sync engine: %v", err)
+		return
 	}
 
 	// Create context with timeout for database operations
@@ -133,7 +142,8 @@ func ExampleResumeSession() {
 	// Get latest session
 	session, err := app.GetLatestSession(ctx)
 	if err != nil {
-		log.Fatal("Failed to get latest session:", err)
+		log.Printf("Failed to get latest session: %v", err)
+		return
 	}
 
 	if session == nil {
@@ -146,11 +156,12 @@ func ExampleResumeSession() {
 	syncCtx, syncCancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer syncCancel()
 	if err := app.ResumeSync(syncCtx, session.ID); err != nil {
-		if err == context.DeadlineExceeded {
-			log.Fatal("Resume sync timed out after 10 minutes")
+		if errors.Is(err, context.DeadlineExceeded) {
+			log.Printf("Resume sync timed out after 10 minutes")
 		} else {
-			log.Fatal("Failed to resume sync:", err)
+			log.Printf("Failed to resume sync: %v", err)
 		}
+		return
 	}
 }
 
@@ -159,17 +170,20 @@ func ExampleAuthentication() {
 	// Create application instance with proper error handling
 	app, err := New()
 	if err != nil {
-		log.Fatal("Failed to create app:", err)
+		log.Printf("Failed to create app: %v", err)
+		return
 	}
 
 	// Initialize application
 	if err := app.Initialize(); err != nil {
-		log.Fatal("Failed to initialize app:", err)
+		log.Printf("Failed to initialize app: %v", err)
+		return
 	}
 
 	// Initialize authentication separately to show the process
 	if err := app.InitializeAuth(); err != nil {
-		log.Fatal("Failed to initialize auth:", err)
+		log.Printf("Failed to initialize auth: %v", err)
+		return
 	}
 
 	// Create context with timeout for authentication
@@ -179,11 +193,12 @@ func ExampleAuthentication() {
 	// Authenticate
 	fmt.Println("Starting authentication...")
 	if err := app.Authenticate(ctx); err != nil {
-		if err == context.DeadlineExceeded {
-			log.Fatal("Authentication timed out after 2 minutes")
+		if errors.Is(err, context.DeadlineExceeded) {
+			log.Printf("Authentication timed out after 2 minutes")
 		} else {
-			log.Fatal("Authentication failed:", err)
+			log.Printf("Authentication failed: %v", err)
 		}
+		return
 	}
 
 	fmt.Println("Authentication successful!")
@@ -194,12 +209,14 @@ func ExampleListSessions() {
 	// Create application instance with proper error handling
 	app, err := New()
 	if err != nil {
-		log.Fatal("Failed to create app:", err)
+		log.Printf("Failed to create app: %v", err)
+		return
 	}
 
 	// Initialize application (authentication not needed for listing sessions)
 	if err := app.Initialize(); err != nil {
-		log.Fatal("Failed to initialize app:", err)
+		log.Printf("Failed to initialize app: %v", err)
+		return
 	}
 
 	// Create context with timeout for database operations
@@ -209,7 +226,8 @@ func ExampleListSessions() {
 	// Get all sessions
 	sessions, err := app.GetSessions(ctx)
 	if err != nil {
-		log.Fatal("Failed to get sessions:", err)
+		log.Printf("Failed to get sessions: %v", err)
+		return
 	}
 
 	fmt.Printf("Found %d sessions:\n", len(sessions))
@@ -255,7 +273,7 @@ func ExampleRobustErrorHandling() {
 		}
 
 		if err := app.StartSync(ctx, "root", "~/CloudPull/Documents", options); err != nil {
-			if err == context.DeadlineExceeded {
+			if errors.Is(err, context.DeadlineExceeded) {
 				return fmt.Errorf("sync timed out after 5 minutes")
 			}
 			return fmt.Errorf("sync failed: %w", err)
@@ -289,12 +307,14 @@ func ExampleRobustErrorHandling() {
 func ExampleGracefulDegradation() {
 	app, err := New()
 	if err != nil {
-		log.Fatal("Failed to create app:", err)
+		log.Printf("Failed to create app: %v", err)
+		return
 	}
 
 	// Initialize core components
 	if err := app.Initialize(); err != nil {
-		log.Fatal("Failed to initialize app:", err)
+		log.Printf("Failed to initialize app: %v", err)
+		return
 	}
 
 	// Try to initialize auth, but continue if it fails
@@ -306,7 +326,8 @@ func ExampleGracefulDegradation() {
 
 	// Initialize sync engine
 	if err := app.InitializeSyncEngine(); err != nil {
-		log.Fatal("Failed to initialize sync engine:", err)
+		log.Printf("Failed to initialize sync engine: %v", err)
+		return
 	}
 
 	// Create context with timeout for operations
@@ -319,7 +340,7 @@ func ExampleGracefulDegradation() {
 		authCtx, authCancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer authCancel()
 		if err := app.Authenticate(authCtx); err != nil {
-			if err == context.DeadlineExceeded {
+			if errors.Is(err, context.DeadlineExceeded) {
 				log.Printf("Authentication timed out after 2 minutes")
 			} else {
 				log.Printf("Authentication failed: %v", err)

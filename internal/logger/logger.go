@@ -254,7 +254,7 @@ func (l *Logger) StructuredError(err error, fields map[string]interface{}) {
 func (l *Logger) SetLevel(level string) error {
 	parsedLevel, err := zerolog.ParseLevel(level)
 	if err != nil {
-		return err
+		return fmt.Errorf("parse log level: %w", err)
 	}
 
 	l.logger = l.logger.Level(parsedLevel)
@@ -372,15 +372,19 @@ func NewFileWriter(filename string, maxSize int64, maxBackups int) (*FileWriter,
 func (fw *FileWriter) Write(p []byte) (n int, err error) {
 	// Check if rotation is needed
 	if fw.file != nil {
-		info, err := fw.file.Stat()
-		if err == nil && info.Size()+int64(len(p)) > fw.maxSize {
+		info, statErr := fw.file.Stat()
+		if statErr == nil && info.Size()+int64(len(p)) > fw.maxSize {
 			if err := fw.rotate(); err != nil {
 				return 0, err
 			}
 		}
 	}
 
-	return fw.file.Write(p)
+	n, err = fw.file.Write(p)
+	if err != nil {
+		return n, fmt.Errorf("write log file: %w", err)
+	}
+	return n, nil
 }
 
 // Close closes the file writer.

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -187,7 +188,8 @@ api:
 	err = v.ReadInConfig()
 	// If the file does not exist, viper.ReadInConfig() returns a specific error.
 	// We created it, so it should be read. If not, defaults + env would apply.
-	if _, ok := err.(viper.ConfigFileNotFoundError); ok && tempConfigFile != "" {
+	var notFoundErr viper.ConfigFileNotFoundError
+	if errors.As(err, &notFoundErr) && tempConfigFile != "" {
 		// This means the tempConfigFile was not found by viper, which is an error in test setup.
 		require.NoError(t, err, "Viper could not find the temp config file: "+tempConfigFile)
 	} else if err != nil {

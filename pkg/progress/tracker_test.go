@@ -10,6 +10,7 @@
 package progress
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -297,7 +298,7 @@ func TestTrackerErrorHandling(t *testing.T) {
 		if update.Type != UpdateTypeError {
 			t.Errorf("expected error update, got %v", update.Type)
 		}
-		if update.Error != testErr {
+		if !errors.Is(update.Error, testErr) {
 			t.Errorf("expected error %v, got %v", testErr, update.Error)
 		}
 	case <-time.After(100 * time.Millisecond):

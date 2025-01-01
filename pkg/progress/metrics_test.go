@@ -10,6 +10,7 @@
 package progress
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -162,7 +163,7 @@ func TestFileMetrics(t *testing.T) {
 		mc.ErrorFile(filename, testErr)
 
 		metric, _ := mc.GetFileMetrics(filename)
-		if metric.Error != testErr {
+		if !errors.Is(metric.Error, testErr) {
 			t.Errorf("expected error %v, got %v", testErr, metric.Error)
 		}
 

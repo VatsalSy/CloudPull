@@ -12,6 +12,7 @@ package errors
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -190,19 +191,20 @@ func (csm *CloudSyncManager) performSync(ctx context.Context, localPath, remoteP
 	// Check context first
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return Wrap(ctx.Err(), "context done")
 	default:
 	}
 
 	// Simulate API call
 	req, err := http.NewRequestWithContext(ctx, "PUT", "https://api.example.com/files"+remotePath, nil)
 	if err != nil {
-		return err
+		return Wrap(err, "create request")
 	}
+	req.Header.Set("X-Local-Path", localPath)
 
 	resp, err := csm.client.Do(req)
 	if err != nil {
-		return err
+		return Wrap(err, "send request")
 	}
 	defer resp.Body.Close()
 
@@ -230,7 +232,8 @@ func (csm *CloudSyncManager) categorizeError(err error, op, path string) *Error 
 	}
 
 	// HTTP errors
-	if httpErr, ok := err.(*httpError); ok {
+	var httpErr *httpError
+	if stderrors.As(err, &httpErr) {
 		switch httpErr.StatusCode {
 		case http.StatusTooManyRequests:
 			return New(ErrorTypeAPIQuota, op, path, err).

@@ -163,7 +163,11 @@ func Save() error {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	return viper.WriteConfigAs(configFile)
+	if err := viper.WriteConfigAs(configFile); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+
+	return nil
 }
 
 // initViper sets up viper configuration.
@@ -192,8 +196,8 @@ func initViper(cfgFile string) {
 	// Set defaults
 	setViperDefaults()
 
-	// Read config file
-	viper.ReadInConfig()
+	// Read config file - ignore error if file doesn't exist
+	_ = viper.ReadInConfig()
 }
 
 // setViperDefaults sets default values in viper.
@@ -304,17 +308,18 @@ func (c *Config) GetChunkSizeBytes() (int64, error) {
 	multiplier := int64(1)
 	value := int64(0)
 
-	if strings.HasSuffix(size, "KB") {
+	switch {
+	case strings.HasSuffix(size, "KB"):
 		multiplier = 1024
-		fmt.Sscanf(size, "%dKB", &value)
-	} else if strings.HasSuffix(size, "MB") {
+		_, _ = fmt.Sscanf(size, "%dKB", &value)
+	case strings.HasSuffix(size, "MB"):
 		multiplier = 1024 * 1024
-		fmt.Sscanf(size, "%dMB", &value)
-	} else if strings.HasSuffix(size, "GB") {
+		_, _ = fmt.Sscanf(size, "%dMB", &value)
+	case strings.HasSuffix(size, "GB"):
 		multiplier = 1024 * 1024 * 1024
-		fmt.Sscanf(size, "%dGB", &value)
-	} else {
-		fmt.Sscanf(size, "%d", &value)
+		_, _ = fmt.Sscanf(size, "%dGB", &value)
+	default:
+		_, _ = fmt.Sscanf(size, "%d", &value)
 	}
 
 	return value * multiplier, nil

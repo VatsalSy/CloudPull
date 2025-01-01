@@ -251,8 +251,12 @@ func ExampleCustomReporter() {
 			case UpdateTypeFile:
 				log.Printf("File completed: %s (%d bytes)\n",
 					update.FileName, update.Bytes)
+			case UpdateTypeBytes:
+				log.Printf("Bytes processed: %d\n", update.Bytes)
 			case UpdateTypeError:
 				log.Printf("Error: %v\n", update.Error)
+			case UpdateTypeState:
+				log.Printf("State update\n")
 			}
 		}
 	}()

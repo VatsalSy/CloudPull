@@ -100,7 +100,7 @@ func (s *FolderStore) CreateBatch(ctx context.Context, folders []*Folder) error 
 // Get retrieves a folder by ID.
 func (s *FolderStore) Get(ctx context.Context, id string) (*Folder, error) {
 	var folder Folder
-	query := `SELECT * FROM folders WHERE id = $1`
+	query := `SELECT * FROM folders WHERE id = ?`
 
 	err := s.db.GetContext(ctx, &folder, query, id)
 	if err != nil {
@@ -116,7 +116,7 @@ func (s *FolderStore) Get(ctx context.Context, id string) (*Folder, error) {
 // GetByDriveID retrieves a folder by drive ID and session ID.
 func (s *FolderStore) GetByDriveID(ctx context.Context, driveID, sessionID string) (*Folder, error) {
 	var folder Folder
-	query := `SELECT * FROM folders WHERE drive_id = $1 AND session_id = $2`
+	query := `SELECT * FROM folders WHERE drive_id = ? AND session_id = ?`
 
 	err := s.db.GetContext(ctx, &folder, query, driveID, sessionID)
 	if err != nil {
@@ -134,7 +134,7 @@ func (s *FolderStore) GetChildren(ctx context.Context, parentID, sessionID strin
 	var folders []*Folder
 	query := `
     SELECT * FROM folders
-    WHERE parent_id = $1 AND session_id = $2
+    WHERE parent_id = ? AND session_id = ?
     ORDER BY name`
 
 	err := s.db.SelectContext(ctx, &folders, query, parentID, sessionID)
@@ -148,7 +148,7 @@ func (s *FolderStore) GetChildren(ctx context.Context, parentID, sessionID strin
 // GetBySession retrieves all folders for a session.
 func (s *FolderStore) GetBySession(ctx context.Context, sessionID string) ([]*Folder, error) {
 	var folders []*Folder
-	query := `SELECT * FROM folders WHERE session_id = $1 ORDER BY path`
+	query := `SELECT * FROM folders WHERE session_id = ? ORDER BY path`
 
 	err := s.db.SelectContext(ctx, &folders, query, sessionID)
 	if err != nil {
@@ -163,7 +163,7 @@ func (s *FolderStore) GetByStatus(ctx context.Context, sessionID, status string)
 	var folders []*Folder
 	query := `
     SELECT * FROM folders
-    WHERE session_id = $1 AND status = $2
+    WHERE session_id = ? AND status = ?
     ORDER BY path`
 
 	err := s.db.SelectContext(ctx, &folders, query, sessionID, status)
@@ -179,9 +179,9 @@ func (s *FolderStore) GetPendingFolders(ctx context.Context, sessionID string, l
 	var folders []*Folder
 	query := `
     SELECT * FROM folders
-    WHERE session_id = $1 AND status = $2
+    WHERE session_id = ? AND status = ?
     ORDER BY path
-    LIMIT $3`
+    LIMIT ?`
 
 	err := s.db.SelectContext(ctx, &folders, query, sessionID, FolderStatusPending, limit)
 	if err != nil {
@@ -220,7 +220,7 @@ func (s *FolderStore) Update(ctx context.Context, folder *Folder) error {
 
 // UpdateStatus updates the folder status.
 func (s *FolderStore) UpdateStatus(ctx context.Context, id, status string) error {
-	query := `UPDATE folders SET status = $1 WHERE id = $2`
+	query := `UPDATE folders SET status = ? WHERE id = ?`
 
 	result, err := s.db.ExecContext(ctx, query, status, id)
 	if err != nil {
@@ -248,7 +248,7 @@ func (s *FolderStore) UpdateStatusBatch(ctx context.Context, ids []string, statu
 	// Use a transaction to ensure all updates succeed or none do
 	return s.db.WithTx(ctx, func(tx *sqlx.Tx) error {
 		// Prepare the update statement once
-		stmt, err := tx.PrepareContext(ctx, "UPDATE folders SET status = $1 WHERE id = $2")
+		stmt, err := tx.PrepareContext(ctx, "UPDATE folders SET status = ? WHERE id = ?")
 		if err != nil {
 			return fmt.Errorf("failed to prepare statement: %w", err)
 		}
@@ -297,8 +297,8 @@ func (s *FolderStore) MarkAsScanned(ctx context.Context, id string) error {
 func (s *FolderStore) MarkAsFailed(ctx context.Context, id string, errorMsg string) error {
 	query := `
     UPDATE folders
-    SET status = $1, error_message = $2
-    WHERE id = $3`
+    SET status = ?, error_message = ?
+    WHERE id = ?`
 
 	result, err := s.db.ExecContext(ctx, query, FolderStatusFailed, errorMsg, id)
 	if err != nil {
@@ -319,7 +319,7 @@ func (s *FolderStore) MarkAsFailed(ctx context.Context, id string, errorMsg stri
 
 // Delete deletes a folder and all its children.
 func (s *FolderStore) Delete(ctx context.Context, id string) error {
-	query := `DELETE FROM folders WHERE id = $1`
+	query := `DELETE FROM folders WHERE id = ?`
 
 	result, err := s.db.ExecContext(ctx, query, id)
 	if err != nil {
@@ -343,7 +343,7 @@ func (s *FolderStore) GetPath(ctx context.Context, folderID string) ([]*Folder, 
 	// Recursive CTE to get the path from root to folder
 	query := `
     WITH RECURSIVE folder_path AS (
-      SELECT * FROM folders WHERE id = $1
+      SELECT * FROM folders WHERE id = ?
       UNION ALL
       SELECT f.* FROM folders f
       INNER JOIN folder_path fp ON f.id = fp.parent_id
@@ -364,7 +364,7 @@ func (s *FolderStore) CountByStatus(ctx context.Context, sessionID string) (map[
 	query := `
     SELECT status, COUNT(*) as count
     FROM folders
-    WHERE session_id = $1
+    WHERE session_id = ?
     GROUP BY status`
 
 	rows, err := s.db.QueryContext(ctx, query, sessionID)

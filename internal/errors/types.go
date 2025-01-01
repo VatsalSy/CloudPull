@@ -53,6 +53,8 @@ const (
 // String returns the string representation of ErrorType.
 func (et ErrorType) String() string {
 	switch et {
+	case ErrorTypeUnknown:
+		return "Unknown"
 	case ErrorTypeNetwork:
 		return "Network"
 	case ErrorTypeAPIQuota:
@@ -92,6 +94,8 @@ func (et ErrorType) IsRetryable() bool {
 		// The retry should use exponential backoff to handle temporary
 		// issues that might have caused the corruption.
 		return true
+	case ErrorTypeUnknown, ErrorTypeContext, ErrorTypeAPI:
+		return false
 	default:
 		return false
 	}

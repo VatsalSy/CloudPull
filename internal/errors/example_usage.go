@@ -12,6 +12,7 @@ package errors
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -156,7 +157,7 @@ func ExampleAPICallWithQuotaHandling(ctx context.Context) error {
 
 		// Use quota-specific policy for quota errors
 		var backoff time.Duration
-		if apiErr.Type == ErrorTypeAPIQuota && quotaPolicy != nil {
+		if apiErr.Type == ErrorTypeAPIQuota {
 			// Apply quota-specific retry policy
 			if i >= quotaPolicy.MaxAttempts {
 				break
@@ -262,7 +263,7 @@ func performStorageOperation(ctx context.Context, checkpoint *OperationCheckpoin
 
 func determineErrorType(err error) ErrorType {
 	// Simple error type detection
-	if err == context.DeadlineExceeded || err == context.Canceled {
+	if stderrors.Is(err, context.DeadlineExceeded) || stderrors.Is(err, context.Canceled) {
 		return ErrorTypeContext
 	}
 
@@ -272,7 +273,8 @@ func determineErrorType(err error) ErrorType {
 
 func categorizeAPIError(err error) *Error {
 	// Example API error categorization
-	if httpErr, ok := err.(*httpError); ok {
+	var httpErr *httpError
+	if stderrors.As(err, &httpErr) {
 		switch httpErr.StatusCode {
 		case http.StatusTooManyRequests:
 			return New(ErrorTypeAPIQuota, "api_call", "", err).

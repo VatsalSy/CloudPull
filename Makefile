@@ -17,6 +17,7 @@ GOVET=$(GOCMD) vet
 GOFMT=$(GOCMD) fmt
 GOMOD=$(GOCMD) mod
 GORUN=$(GOCMD) run
+GOLANGCI_LINT_VERSION ?= v1.64.2
 
 # Default target
 .DEFAULT_GOAL := help
@@ -94,27 +95,17 @@ benchmark: ## Run benchmarks
 .PHONY: lint
 lint: ## Run linters
 	@echo "Running linters..."
-	@if command -v golangci-lint &> /dev/null; then \
-		golangci-lint run; \
-	else \
-		echo "golangci-lint not installed. Run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
-		exit 1; \
-	fi
+	@GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION) bash scripts/run-golangci-lint.sh
 
 .PHONY: lint-fix
 lint-fix: ## Run linters with auto-fix
 	@echo "Running linters with auto-fix..."
-	@if command -v golangci-lint &> /dev/null; then \
-		golangci-lint run --fix; \
-	else \
-		echo "golangci-lint not installed. Run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
-		exit 1; \
-	fi
+	@GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION) bash scripts/run-golangci-lint.sh --fix
 
 .PHONY: lint-install
 lint-install: ## Install linting tools
 	@echo "Installing linting tools..."
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
 	@echo "Linting tools installed"
 

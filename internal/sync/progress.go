@@ -16,6 +16,7 @@ package sync
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -368,7 +369,7 @@ func (pt *ProgressTracker) CheckBandwidthLimit(ctx context.Context, bytesRequest
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("bandwidth limit wait canceled: %w", ctx.Err())
 		case <-timer.C:
 			pt.bytesThisPeriod = bytesRequested
 			pt.periodStart = time.Now()

@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/VatsalSy/CloudPull/internal/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/VatsalSy/CloudPull/internal/state"
 )
 
 // =============================================================================
@@ -387,7 +388,7 @@ func TestPriorityQueue_ConcurrentAccess(t *testing.T) {
 	}
 
 	wg.Wait()
-	assert.Equal(t, int32(numGoroutines*tasksPerGoroutine), popCount)
+	assert.Equal(t, numGoroutines*tasksPerGoroutine, int(popCount))
 	assert.Equal(t, 0, pq.Len())
 }
 
@@ -647,10 +648,11 @@ func TestTaskResult(t *testing.T) {
 // =============================================================================
 
 func TestSyncProgress(t *testing.T) {
+	startTime := time.Now()
 	progress := &SyncProgress{
 		SessionID:       "session-1",
 		Status:          "running",
-		StartTime:       time.Now(),
+		StartTime:       startTime,
 		ElapsedTime:     5 * time.Minute,
 		RemainingTime:   10 * time.Minute,
 		TotalFiles:      100,
@@ -668,12 +670,20 @@ func TestSyncProgress(t *testing.T) {
 
 	assert.Equal(t, "session-1", progress.SessionID)
 	assert.Equal(t, "running", progress.Status)
+	assert.Equal(t, startTime, progress.StartTime)
 	assert.Equal(t, int64(100), progress.TotalFiles)
 	assert.Equal(t, int64(50), progress.CompletedFiles)
 	assert.Equal(t, int64(5), progress.FailedFiles)
 	assert.Equal(t, int64(3), progress.SkippedFiles)
 	assert.Equal(t, 5*time.Minute, progress.ElapsedTime)
 	assert.Equal(t, 10*time.Minute, progress.RemainingTime)
+	assert.Equal(t, int64(1024*1024*1024), progress.TotalBytes)
+	assert.Equal(t, int64(512*1024*1024), progress.CompletedBytes)
+	assert.Equal(t, int64(10*1024*1024), progress.CurrentSpeed)
+	assert.Equal(t, int64(8*1024*1024), progress.AverageSpeed)
+	assert.Equal(t, int64(20), progress.FoldersScanned)
+	assert.Equal(t, int64(3), progress.ActiveDownloads)
+	assert.Equal(t, 42, progress.QueuedDownloads)
 }
 
 // =============================================================================
@@ -681,6 +691,8 @@ func TestSyncProgress(t *testing.T) {
 // =============================================================================
 
 func TestFileProgress_Struct(t *testing.T) {
+	startTime := time.Now()
+	lastUpdate := startTime.Add(10 * time.Second)
 	fp := &FileProgress{
 		FileID:          "file-1",
 		FileName:        "test.txt",
@@ -688,8 +700,8 @@ func TestFileProgress_Struct(t *testing.T) {
 		TotalBytes:      1024,
 		BytesDownloaded: 512,
 		Speed:           100,
-		StartTime:       time.Now(),
-		LastUpdate:      time.Now(),
+		StartTime:       startTime,
+		LastUpdate:      lastUpdate,
 	}
 
 	assert.Equal(t, "file-1", fp.FileID)
@@ -698,6 +710,8 @@ func TestFileProgress_Struct(t *testing.T) {
 	assert.Equal(t, int64(1024), fp.TotalBytes)
 	assert.Equal(t, int64(512), fp.BytesDownloaded)
 	assert.Equal(t, int64(100), fp.Speed)
+	assert.Equal(t, startTime, fp.StartTime)
+	assert.Equal(t, lastUpdate, fp.LastUpdate)
 }
 
 // =============================================================================
@@ -706,9 +720,10 @@ func TestFileProgress_Struct(t *testing.T) {
 
 func TestProgressEvent(t *testing.T) {
 	testErr := errors.New("test error")
+	timestamp := time.Now()
 	event := &ProgressEvent{
 		Type:             ProgressEventFileFailed,
-		Timestamp:        time.Now(),
+		Timestamp:        timestamp,
 		SessionID:        "session-1",
 		ItemID:           "file-1",
 		ItemName:         "test.txt",
@@ -728,10 +743,20 @@ func TestProgressEvent(t *testing.T) {
 	}
 
 	assert.Equal(t, ProgressEventFileFailed, event.Type)
+	assert.Equal(t, timestamp, event.Timestamp)
 	assert.Equal(t, "session-1", event.SessionID)
 	assert.Equal(t, "file-1", event.ItemID)
+	assert.Equal(t, "test.txt", event.ItemName)
+	assert.Equal(t, "/path/test.txt", event.ItemPath)
 	assert.Equal(t, testErr, event.Error)
 	assert.Equal(t, "test error", event.ErrorMessage)
+	assert.Equal(t, int64(500), event.BytesTransferred)
+	assert.Equal(t, int64(1000), event.TotalBytes)
+	assert.Equal(t, int64(10), event.TotalFiles)
+	assert.Equal(t, int64(5), event.FilesCompleted)
+	assert.Equal(t, int64(1024), event.CurrentSpeed)
+	assert.Equal(t, int64(2048), event.AverageSpeed)
+	assert.Equal(t, 5*time.Minute, event.RemainingTime)
 	assert.Equal(t, 1, event.Context["retry"])
 }
 
@@ -762,6 +787,7 @@ func TestWalkResult(t *testing.T) {
 	assert.Len(t, result.Files, 2)
 	assert.Equal(t, 2, result.Depth)
 	assert.False(t, result.IsSkipped)
+	assert.Equal(t, "", result.SkipReason)
 	assert.Nil(t, result.Error)
 }
 
@@ -772,6 +798,7 @@ func TestWalkResult_Skipped(t *testing.T) {
 		SkipReason: "excluded by pattern",
 	}
 
+	assert.Equal(t, "folder-1", result.Folder.ID)
 	assert.True(t, result.IsSkipped)
 	assert.Equal(t, "excluded by pattern", result.SkipReason)
 }
@@ -790,6 +817,7 @@ func TestWalkResult_Error(t *testing.T) {
 // =============================================================================
 
 func TestDownloadInfo(t *testing.T) {
+	startTime := time.Now()
 	info := &DownloadInfo{
 		FileID:          "file-1",
 		FileName:        "test.pdf",
@@ -800,7 +828,7 @@ func TestDownloadInfo(t *testing.T) {
 		IsGoogleDoc:     false,
 		ExportFormat:    "",
 		Checksum:        "abc123",
-		StartTime:       time.Now(),
+		StartTime:       startTime,
 	}
 
 	assert.Equal(t, "file-1", info.FileID)
@@ -810,7 +838,9 @@ func TestDownloadInfo(t *testing.T) {
 	assert.Equal(t, int64(1024*1024), info.Size)
 	assert.Equal(t, int64(512*1024), info.BytesDownloaded)
 	assert.False(t, info.IsGoogleDoc)
+	assert.Equal(t, "", info.ExportFormat)
 	assert.Equal(t, "abc123", info.Checksum)
+	assert.Equal(t, startTime, info.StartTime)
 }
 
 func TestDownloadInfo_GoogleDoc(t *testing.T) {
@@ -821,6 +851,8 @@ func TestDownloadInfo_GoogleDoc(t *testing.T) {
 		ExportFormat: "application/pdf",
 	}
 
+	assert.Equal(t, "doc-1", info.FileID)
+	assert.Equal(t, "My Document", info.FileName)
 	assert.True(t, info.IsGoogleDoc)
 	assert.Equal(t, "application/pdf", info.ExportFormat)
 }

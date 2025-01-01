@@ -69,7 +69,7 @@ func (s *SessionStore) Create(ctx context.Context, session *Session) error {
 // Get retrieves a session by ID.
 func (s *SessionStore) Get(ctx context.Context, id string) (*Session, error) {
 	var session Session
-	query := `SELECT * FROM sessions WHERE id = $1`
+	query := `SELECT * FROM sessions WHERE id = ?`
 
 	err := s.db.GetContext(ctx, &session, query, id)
 	if err != nil {
@@ -85,7 +85,7 @@ func (s *SessionStore) Get(ctx context.Context, id string) (*Session, error) {
 // GetActive retrieves all active sessions.
 func (s *SessionStore) GetActive(ctx context.Context) ([]*Session, error) {
 	var sessions []*Session
-	query := `SELECT * FROM sessions WHERE status = $1 ORDER BY start_time DESC`
+	query := `SELECT * FROM sessions WHERE status = ? ORDER BY start_time DESC`
 
 	err := s.db.SelectContext(ctx, &sessions, query, SessionStatusActive)
 	if err != nil {
@@ -98,7 +98,7 @@ func (s *SessionStore) GetActive(ctx context.Context) ([]*Session, error) {
 // GetByStatus retrieves sessions by status.
 func (s *SessionStore) GetByStatus(ctx context.Context, status string) ([]*Session, error) {
 	var sessions []*Session
-	query := `SELECT * FROM sessions WHERE status = $1 ORDER BY start_time DESC`
+	query := `SELECT * FROM sessions WHERE status = ? ORDER BY start_time DESC`
 
 	err := s.db.SelectContext(ctx, &sessions, query, status)
 	if err != nil {
@@ -111,7 +111,7 @@ func (s *SessionStore) GetByStatus(ctx context.Context, status string) ([]*Sessi
 // List retrieves sessions with pagination.
 func (s *SessionStore) List(ctx context.Context, limit, offset int) ([]*Session, error) {
 	var sessions []*Session
-	query := `SELECT * FROM sessions ORDER BY start_time DESC LIMIT $1 OFFSET $2`
+	query := `SELECT * FROM sessions ORDER BY start_time DESC LIMIT ? OFFSET ?`
 
 	err := s.db.SelectContext(ctx, &sessions, query, limit, offset)
 	if err != nil {
@@ -160,11 +160,11 @@ func (s *SessionStore) Update(ctx context.Context, session *Session) error {
 
 // UpdateStatus updates the session status.
 func (s *SessionStore) UpdateStatus(ctx context.Context, id, status string) error {
-	query := `UPDATE sessions SET status = $1, updated_at = $2 WHERE id = $3 AND updated_at = (
-		SELECT updated_at FROM sessions WHERE id = $3
+	query := `UPDATE sessions SET status = ?, updated_at = ? WHERE id = ? AND updated_at = (
+		SELECT updated_at FROM sessions WHERE id = ?
 	)`
 
-	result, err := s.db.ExecContext(ctx, query, status, time.Now().UTC(), id)
+	result, err := s.db.ExecContext(ctx, query, status, time.Now().UTC(), id, id)
 	if err != nil {
 		return fmt.Errorf("failed to update session status: %w", err)
 	}
@@ -185,14 +185,14 @@ func (s *SessionStore) UpdateStatus(ctx context.Context, id, status string) erro
 func (s *SessionStore) UpdateProgress(ctx context.Context, id string, delta SessionProgressDelta) error {
 	query := `
     UPDATE sessions SET
-      total_files = total_files + $1,
-      completed_files = completed_files + $2,
-      failed_files = failed_files + $3,
-      skipped_files = skipped_files + $4,
-      total_bytes = total_bytes + $5,
-      completed_bytes = completed_bytes + $6,
-      updated_at = $7
-    WHERE id = $8`
+      total_files = total_files + ?,
+      completed_files = completed_files + ?,
+      failed_files = failed_files + ?,
+      skipped_files = skipped_files + ?,
+      total_bytes = total_bytes + ?,
+      completed_bytes = completed_bytes + ?,
+      updated_at = ?
+    WHERE id = ?`
 
 	result, err := s.db.ExecContext(ctx, query,
 		delta.TotalFiles,
@@ -224,8 +224,8 @@ func (s *SessionStore) UpdateProgress(ctx context.Context, id string, delta Sess
 func (s *SessionStore) Complete(ctx context.Context, id string) error {
 	query := `
     UPDATE sessions
-    SET status = $1, end_time = $2
-    WHERE id = $3 AND status = $4`
+    SET status = ?, end_time = ?
+    WHERE id = ? AND status = ?`
 
 	result, err := s.db.ExecContext(ctx, query,
 		SessionStatusCompleted,
@@ -285,8 +285,8 @@ func (s *SessionStore) Resume(ctx context.Context, id string) error {
 func (s *SessionStore) Cancel(ctx context.Context, id string) error {
 	query := `
     UPDATE sessions
-    SET status = $1, end_time = $2
-    WHERE id = $3 AND status IN ($4, $5)`
+    SET status = ?, end_time = ?
+    WHERE id = ? AND status IN (?, ?)`
 
 	result, err := s.db.ExecContext(ctx, query,
 		SessionStatusCancelled,
@@ -313,7 +313,7 @@ func (s *SessionStore) Cancel(ctx context.Context, id string) error {
 
 // Delete deletes a session and all related data.
 func (s *SessionStore) Delete(ctx context.Context, id string) error {
-	query := `DELETE FROM sessions WHERE id = $1`
+	query := `DELETE FROM sessions WHERE id = ?`
 
 	result, err := s.db.ExecContext(ctx, query, id)
 	if err != nil {
@@ -335,7 +335,7 @@ func (s *SessionStore) Delete(ctx context.Context, id string) error {
 // GetSummary retrieves a session summary.
 func (s *SessionStore) GetSummary(ctx context.Context, id string) (*SessionSummary, error) {
 	var summary SessionSummary
-	query := `SELECT * FROM session_summary WHERE id = $1`
+	query := `SELECT * FROM session_summary WHERE id = ?`
 
 	err := s.db.GetContext(ctx, &summary, query, id)
 	if err != nil {
@@ -351,7 +351,7 @@ func (s *SessionStore) GetSummary(ctx context.Context, id string) (*SessionSumma
 // ListSummaries retrieves session summaries with pagination.
 func (s *SessionStore) ListSummaries(ctx context.Context, limit, offset int) ([]*SessionSummary, error) {
 	var summaries []*SessionSummary
-	query := `SELECT * FROM session_summary ORDER BY start_time DESC LIMIT $1 OFFSET $2`
+	query := `SELECT * FROM session_summary ORDER BY start_time DESC LIMIT ? OFFSET ?`
 
 	err := s.db.SelectContext(ctx, &summaries, query, limit, offset)
 	if err != nil {
@@ -366,7 +366,7 @@ func (s *SessionStore) GetResumableSessions(ctx context.Context) ([]*Session, er
 	var sessions []*Session
 	query := `
     SELECT * FROM sessions
-    WHERE status IN ($1, $2)
+    WHERE status IN (?, ?)
     ORDER BY start_time DESC`
 
 	err := s.db.SelectContext(ctx, &sessions, query, SessionStatusPaused, SessionStatusFailed)
