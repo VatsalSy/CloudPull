@@ -28,8 +28,15 @@ help: ## Show this help message
 	@echo 'Targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
+.PHONY: deps
+deps: ## Download and verify dependencies
+	@echo "Downloading dependencies..."
+	@$(GOMOD) download
+	@$(GOMOD) verify
+	@echo "Dependencies downloaded and verified"
+
 .PHONY: build
-build: ## Build the CloudPull binary
+build: deps ## Build the CloudPull binary
 	@echo "Building CloudPull..."
 	@mkdir -p $(BUILD_DIR)
 	$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./$(MAIN_PATH)

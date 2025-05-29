@@ -26,10 +26,20 @@ Fast, resumable Google Drive folder synchronization tool with rsync-like functio
 git clone https://github.com/VatsalSy/CloudPull.git
 cd CloudPull
 
-# Build
+# Quick setup (checks Go version, downloads deps, builds)
+./scripts/setup.sh
+
+# Or build manually (automatically downloads dependencies)
 make build
 
-# Install (optional)
+# Or if you prefer manual steps:
+# 1. Download dependencies
+go mod download
+
+# 2. Build the binary
+go build -o build/cloudpull ./cmd/cloudpull
+
+# Install to $GOPATH/bin (optional)
 make install
 ```
 
@@ -214,6 +224,30 @@ cloudpull/
 │   └── progress/     # Progress tracking
 └── tests/            # Test suites
 ```
+
+## Troubleshooting
+
+### Build Issues
+
+If you encounter build errors related to missing dependencies:
+
+```bash
+# Clean and rebuild
+make clean
+go mod download
+make build
+
+# Or use the deps target
+make deps
+make build
+```
+
+### Common Issues
+
+1. **"command not found: go"** - Install Go 1.21+ from https://golang.org/dl/
+2. **Permission errors** - Ensure you have write access to the destination directory
+3. **Authentication fails** - Delete `~/.cloudpull/token.json` and re-authenticate
+4. **Rate limit errors** - CloudPull automatically handles these, but you can reduce concurrent downloads
 
 ## FAQ
 
