@@ -8,7 +8,7 @@ import (
   "strings"
 
   "github.com/AlecAivazis/survey/v2"
-  "github.com/cloudpull/cloudpull/internal/app"
+  "github.com/VatsalSy/CloudPull/internal/app"
   "github.com/fatih/color"
   "github.com/spf13/cobra"
   "github.com/spf13/viper"

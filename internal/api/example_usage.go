@@ -6,7 +6,7 @@ import (
   "os"
   "path/filepath"
 
-  "github.com/cloudpull/cloudpull/internal/logger"
+  "github.com/VatsalSy/CloudPull/internal/logger"
   "google.golang.org/api/googleapi"
 )
 

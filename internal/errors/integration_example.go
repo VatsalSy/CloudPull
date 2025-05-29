@@ -17,7 +17,7 @@ import (
   "net/http"
   "time"
   
-  "github.com/cloudpull/cloudpull/internal/logger"
+  "github.com/VatsalSy/CloudPull/internal/logger"
 )
 
 // CloudSyncManager demonstrates integrated error handling

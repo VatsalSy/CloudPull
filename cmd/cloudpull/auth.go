@@ -4,7 +4,7 @@ import (
   "context"
   "fmt"
 
-  "github.com/cloudpull/cloudpull/internal/app"
+  "github.com/VatsalSy/CloudPull/internal/app"
   "github.com/fatih/color"
   "github.com/spf13/cobra"
 )

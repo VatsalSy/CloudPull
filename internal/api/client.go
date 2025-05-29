@@ -10,8 +10,8 @@ import (
   "strings"
   "time"
 
-  "github.com/cloudpull/cloudpull/internal/errors"
-  "github.com/cloudpull/cloudpull/internal/logger"
+  "github.com/VatsalSy/CloudPull/internal/errors"
+  "github.com/VatsalSy/CloudPull/internal/logger"
   "google.golang.org/api/drive/v3"
   "google.golang.org/api/googleapi"
 )

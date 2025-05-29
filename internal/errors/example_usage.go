@@ -16,7 +16,7 @@ import (
   "net/http"
   "time"
   
-  "github.com/cloudpull/cloudpull/internal/logger"
+  "github.com/VatsalSy/CloudPull/internal/logger"
 )
 
 // Example: File sync operation with error handling

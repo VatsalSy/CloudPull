@@ -19,7 +19,7 @@ import (
   "fmt"
   "time"
   
-  "github.com/cloudpull/cloudpull/internal/state"
+  "github.com/VatsalSy/CloudPull/internal/state"
 )
 
 // NewNullString creates a valid sql.NullString

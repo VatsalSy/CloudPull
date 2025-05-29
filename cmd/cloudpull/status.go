@@ -12,9 +12,9 @@ import (
   "github.com/jedib0t/go-pretty/v6/table"
   "github.com/schollz/progressbar/v3"
   "github.com/spf13/cobra"
-  "github.com/yourusername/cloudpull/internal/state"
-  "github.com/yourusername/cloudpull/internal/sync"
-  "github.com/yourusername/cloudpull/pkg/progress"
+  "github.com/VatsalSy/CloudPull/internal/state"
+  "github.com/VatsalSy/CloudPull/internal/sync"
+  "github.com/VatsalSy/CloudPull/pkg/progress"
 )
 
 var statusCmd = &cobra.Command{

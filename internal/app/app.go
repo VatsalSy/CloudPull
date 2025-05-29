@@ -25,12 +25,12 @@ import (
   "syscall"
   "time"
 
-  "github.com/cloudpull/cloudpull/internal/api"
-  "github.com/cloudpull/cloudpull/internal/config"
-  "github.com/cloudpull/cloudpull/internal/errors"
-  "github.com/cloudpull/cloudpull/internal/logger"
-  "github.com/cloudpull/cloudpull/internal/state"
-  "github.com/cloudpull/cloudpull/internal/sync"
+  "github.com/VatsalSy/CloudPull/internal/api"
+  "github.com/VatsalSy/CloudPull/internal/config"
+  "github.com/VatsalSy/CloudPull/internal/errors"
+  "github.com/VatsalSy/CloudPull/internal/logger"
+  "github.com/VatsalSy/CloudPull/internal/state"
+  "github.com/VatsalSy/CloudPull/internal/sync"
   "github.com/spf13/viper"
 )
 

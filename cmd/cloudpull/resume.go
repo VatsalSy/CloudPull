@@ -7,8 +7,8 @@ import (
   "time"
 
   "github.com/AlecAivazis/survey/v2"
-  "github.com/cloudpull/cloudpull/internal/app"
-  "github.com/cloudpull/cloudpull/internal/state"
+  "github.com/VatsalSy/CloudPull/internal/app"
+  "github.com/VatsalSy/CloudPull/internal/state"
   "github.com/fatih/color"
   "github.com/jedib0t/go-pretty/v6/table"
   "github.com/spf13/cobra"

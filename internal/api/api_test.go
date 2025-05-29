@@ -7,7 +7,7 @@ import (
   "testing"
   "time"
 
-  "github.com/cloudpull/cloudpull/internal/logger"
+  "github.com/VatsalSy/CloudPull/internal/logger"
   "github.com/stretchr/testify/assert"
   "github.com/stretchr/testify/require"
   "golang.org/x/oauth2"

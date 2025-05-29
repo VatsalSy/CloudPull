@@ -15,7 +15,7 @@ import (
   "log"
   "time"
   
-  "github.com/yourusername/cloudpull/internal/sync"
+  "github.com/VatsalSy/CloudPull/internal/sync"
 )
 
 // Example demonstrates how to use the progress tracking system

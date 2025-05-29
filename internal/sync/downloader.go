@@ -27,10 +27,10 @@ import (
   "sync"
   "time"
   
-  "github.com/cloudpull/cloudpull/internal/api"
-  "github.com/cloudpull/cloudpull/internal/errors"
-  "github.com/cloudpull/cloudpull/internal/logger"
-  "github.com/cloudpull/cloudpull/internal/state"
+  "github.com/VatsalSy/CloudPull/internal/api"
+  "github.com/VatsalSy/CloudPull/internal/errors"
+  "github.com/VatsalSy/CloudPull/internal/logger"
+  "github.com/VatsalSy/CloudPull/internal/state"
 )
 
 // DownloadManager manages file downloads with advanced features

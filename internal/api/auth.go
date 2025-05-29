@@ -9,8 +9,8 @@ import (
   "path/filepath"
   "time"
 
-  "github.com/cloudpull/cloudpull/internal/errors"
-  "github.com/cloudpull/cloudpull/internal/logger"
+  "github.com/VatsalSy/CloudPull/internal/errors"
+  "github.com/VatsalSy/CloudPull/internal/logger"
   "golang.org/x/oauth2"
   "golang.org/x/oauth2/google"
   "google.golang.org/api/drive/v3"

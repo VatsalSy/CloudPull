@@ -5,7 +5,7 @@ import (
   "sync"
   "time"
 
-  "github.com/cloudpull/cloudpull/internal/errors"
+  "github.com/VatsalSy/CloudPull/internal/errors"
   "golang.org/x/time/rate"
 )
 

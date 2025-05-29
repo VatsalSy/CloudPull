@@ -9,8 +9,8 @@ import (
   "time"
 
   "github.com/AlecAivazis/survey/v2"
-  "github.com/cloudpull/cloudpull/internal/app"
-  "github.com/cloudpull/cloudpull/internal/sync"
+  "github.com/VatsalSy/CloudPull/internal/app"
+  "github.com/VatsalSy/CloudPull/internal/sync"
   "github.com/fatih/color"
   "github.com/schollz/progressbar/v3"
   "github.com/spf13/cobra"

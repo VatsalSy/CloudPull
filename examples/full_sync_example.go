@@ -21,7 +21,7 @@ import (
   "syscall"
   "time"
 
-  "github.com/cloudpull/cloudpull/internal/app"
+  "github.com/VatsalSy/CloudPull/internal/app"
   "github.com/fatih/color"
 )
 
