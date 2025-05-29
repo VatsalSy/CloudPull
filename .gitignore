@@ -1,0 +1,71 @@
+# CloudPull .gitignore
+
+# Local planning and configuration
+.claude/
+CLAUDE.md
+.claude.md
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.html
+
+# Go workspace file
+go.work
+
+# Dependency directories
+vendor/
+
+# IDE directories
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Log files
+*.log
+
+# Temporary files
+tmp/
+temp/
+
+# OAuth tokens and credentials
+credentials.json
+token.json
+client_secret*.json
+
+# Build artifacts
+dist/
+build/
+
+# Debug files
+debug
+__debug_bin
+
+# Configuration files with sensitive data
+config.local.yaml
+config.prod.yaml
