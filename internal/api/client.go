@@ -450,6 +450,31 @@ func (dc *DriveClient) isRetryableError(err error) bool {
   return false
 }
 
+// GetFileContent downloads a file chunk with byte range support
+func (dc *DriveClient) GetFileContent(ctx context.Context, fileID string, startOffset, endOffset int64) (*http.Response, error) {
+  // Wait for rate limit
+  if err := dc.rateLimiter.Wait(ctx); err != nil {
+    return nil, err
+  }
+
+  // Create request with byte range
+  req := dc.service.Files.Get(fileID).Alt("media")
+  req.Header().Set("Range", fmt.Sprintf("bytes=%d-%d", startOffset, endOffset))
+  
+  var resp *http.Response
+  err := dc.retryWithBackoff(ctx, func() error {
+    var err error
+    resp, err = req.Download()
+    return err
+  })
+  
+  if err != nil {
+    return nil, errors.Wrap(err, "failed to download file content")
+  }
+  
+  return resp, nil
+}
+
 // generateRandom generates a random float between 0 and 1
 func generateRandom() float64 {
   return float64(time.Now().UnixNano()%1000) / 1000.0

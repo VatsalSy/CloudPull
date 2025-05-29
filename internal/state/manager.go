@@ -81,38 +81,6 @@ func (m *Manager) Queries() *QueryBuilder {
   return m.queries
 }
 
-// CreateSession creates a new session with initial setup
-func (m *Manager) CreateSession(ctx context.Context, rootFolderID, rootFolderName, destinationPath string) (*Session, error) {
-  session := &Session{
-    RootFolderID:    rootFolderID,
-    RootFolderName:  sql.NullString{String: rootFolderName, Valid: rootFolderName != ""},
-    DestinationPath: destinationPath,
-    Status:          SessionStatusActive,
-  }
-
-  err := m.sessions.Create(ctx, session)
-  if err != nil {
-    return nil, fmt.Errorf("failed to create session: %w", err)
-  }
-
-  // Create root folder entry
-  rootFolder := &Folder{
-    DriveID:   rootFolderID,
-    SessionID: session.ID,
-    Name:      rootFolderName,
-    Path:      "/",
-    Status:    FolderStatusPending,
-  }
-
-  err = m.folders.Create(ctx, rootFolder)
-  if err != nil {
-    // Rollback session creation
-    m.sessions.Delete(ctx, session.ID)
-    return nil, fmt.Errorf("failed to create root folder: %w", err)
-  }
-
-  return session, nil
-}
 
 // LogError logs an error to the error_log table
 func (m *Manager) LogError(ctx context.Context, sessionID, itemID, itemType, errorType string, err error) error {
@@ -402,4 +370,80 @@ func (m *Manager) SetConfig(ctx context.Context, key, value string) error {
   }
 
   return nil
+}
+
+// CreateSession creates a new session
+func (m *Manager) CreateSession(ctx context.Context, session *Session) error {
+  return m.sessions.Create(ctx, session)
+}
+
+// GetSession retrieves a session by ID
+func (m *Manager) GetSession(ctx context.Context, sessionID string) (*Session, error) {
+  return m.sessions.Get(ctx, sessionID)
+}
+
+// UpdateSession updates a session
+func (m *Manager) UpdateSession(ctx context.Context, session *Session) error {
+  return m.sessions.Update(ctx, session)
+}
+
+// UpdateSessionStatus updates the session status
+func (m *Manager) UpdateSessionStatus(ctx context.Context, sessionID string, status string) error {
+  return m.sessions.UpdateStatus(ctx, sessionID, status)
+}
+
+// UpdateSessionTotals updates the session total counts
+func (m *Manager) UpdateSessionTotals(ctx context.Context, sessionID string, totalFiles, totalBytes int64) error {
+  query := `
+    UPDATE sessions 
+    SET total_files = $2, total_bytes = $3, updated_at = $4
+    WHERE id = $1`
+  
+  _, err := m.db.ExecContext(ctx, query, sessionID, totalFiles, totalBytes, time.Now())
+  if err != nil {
+    return fmt.Errorf("failed to update session totals: %w", err)
+  }
+  
+  return nil
+}
+
+// CreateFolder creates a new folder
+func (m *Manager) CreateFolder(ctx context.Context, folder *Folder) error {
+  return m.folders.Create(ctx, folder)
+}
+
+// UpdateFolder updates a folder
+func (m *Manager) UpdateFolder(ctx context.Context, folder *Folder) error {
+  return m.folders.Update(ctx, folder)
+}
+
+// CreateFiles creates multiple files in a batch
+func (m *Manager) CreateFiles(ctx context.Context, files []*File) error {
+  return m.files.CreateBatch(ctx, files)
+}
+
+// UpdateFileStatus updates the status of a file
+func (m *Manager) UpdateFileStatus(ctx context.Context, file *File) error {
+  return m.files.UpdateStatus(ctx, file.ID, file.Status, file.BytesDownloaded)
+}
+
+// GetPendingFiles retrieves pending files for a session
+func (m *Manager) GetPendingFiles(ctx context.Context, sessionID string, limit int) ([]*File, error) {
+  query := `
+    SELECT * FROM files 
+    WHERE session_id = $1 
+      AND status IN ($2, $3)
+    ORDER BY 
+      CASE WHEN status = $3 THEN 0 ELSE 1 END,
+      size ASC
+    LIMIT $4`
+  
+  var files []*File
+  err := m.db.SelectContext(ctx, &files, query, 
+    sessionID, FileStatusPending, FileStatusDownloading, limit)
+  if err != nil {
+    return nil, fmt.Errorf("failed to get pending files: %w", err)
+  }
+  
+  return files, nil
 }

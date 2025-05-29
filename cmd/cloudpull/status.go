@@ -3,13 +3,18 @@ package main
 import (
   "fmt"
   "os"
+  "runtime"
   "strings"
+  "sync"
   "time"
 
   "github.com/fatih/color"
   "github.com/jedib0t/go-pretty/v6/table"
   "github.com/schollz/progressbar/v3"
   "github.com/spf13/cobra"
+  "github.com/yourusername/cloudpull/internal/state"
+  "github.com/yourusername/cloudpull/internal/sync"
+  "github.com/yourusername/cloudpull/pkg/progress"
 )
 
 var statusCmd = &cobra.Command{
@@ -300,55 +305,100 @@ type SystemStats struct {
 }
 
 func getActiveSessions() []ActiveSession {
-  // TODO: Implement actual session tracking
-  // This is placeholder data
-  return []ActiveSession{
-    {
-      ID:              "session_active_1",
-      StartTime:       time.Now().Add(-45 * time.Minute),
-      Source:          "Work Documents",
-      Destination:     "~/CloudPull/WorkDocs",
-      TotalFiles:      324,
-      CompletedFiles:  187,
-      TotalBytes:      1024 * 1024 * 850,
-      DownloadedBytes: 1024 * 1024 * 492,
-      Speed:           1024 * 1024 * 2,
-      AvgSpeed:        1024 * 1024 * 3,
-      PeakSpeed:       1024 * 1024 * 8,
-      ETA:             15 * time.Minute,
-      CurrentFile:     "Quarterly_Report_2024.pdf",
-      CurrentFileSize: 1024 * 1024 * 12,
-      CurrentFileProgress: 67.5,
-      RecentFiles: []CompletedFile{
-        {"Budget_2024.xlsx", 1024 * 512},
-        {"Meeting_Notes.docx", 1024 * 256},
-      },
-    },
+  // Get state manager instance
+  stateManager := state.GetManager()
+  if stateManager == nil {
+    return []ActiveSession{}
   }
+  
+  // Get active sessions from state
+  sessions, err := stateManager.GetActiveSessions()
+  if err != nil {
+    return []ActiveSession{}
+  }
+  
+  activeSessions := make([]ActiveSession, 0, len(sessions))
+  
+  for _, session := range sessions {
+    // Get progress tracker for this session
+    tracker := getProgressTracker(session.ID)
+    if tracker == nil {
+      continue
+    }
+    
+    snapshot := tracker.GetSnapshot()
+    metrics := getMetricsCollector(session.ID)
+    
+    activeSession := ActiveSession{
+      ID:              session.ID,
+      StartTime:       session.StartTime,
+      Source:          session.Source,
+      Destination:     session.Destination,
+      TotalFiles:      int(snapshot.TotalFiles),
+      CompletedFiles:  int(snapshot.ProcessedFiles),
+      TotalBytes:      snapshot.TotalBytes,
+      DownloadedBytes: snapshot.ProcessedBytes,
+      Speed:           int64(snapshot.BytesPerSecond()),
+      CurrentFile:     snapshot.CurrentFile,
+      ETA:             snapshot.ETA(),
+    }
+    
+    // Get metrics if available
+    if metrics != nil {
+      stats := metrics.GetStats()
+      activeSession.AvgSpeed = int64(stats.AverageSpeed)
+      activeSession.Speed = int64(stats.CurrentSpeed)
+      
+      // Get recent completed files
+      activeSession.RecentFiles = getRecentFiles(session.ID, 5)
+    }
+    
+    activeSessions = append(activeSessions, activeSession)
+  }
+  
+  return activeSessions
 }
 
 func getSyncHistory() []SyncSession {
-  // TODO: Implement actual history
-  return []SyncSession{
-    {
-      ID:         "session_2024_01_19_091523",
-      StartTime:  time.Now().Add(-26 * time.Hour),
-      TotalFiles: 1250,
-      TotalBytes: 1024 * 1024 * 1024 * 5,
-    },
+  stateManager := state.GetManager()
+  if stateManager == nil {
+    return []SyncSession{}
   }
+  
+  // Get completed sessions from state
+  sessions, err := stateManager.GetCompletedSessions(10) // Last 10 sessions
+  if err != nil {
+    return []SyncSession{}
+  }
+  
+  return sessions
 }
 
 func getSystemStats() SystemStats {
-  // TODO: Implement actual system stats
+  // Get aggregate stats from all active sessions
+  var totalDownloadRate, totalUploadRate int64
+  var activeThreads int
+  
+  sessions := getActiveSessions()
+  for _, session := range sessions {
+    totalDownloadRate += session.Speed
+    activeThreads++ // Each session represents at least one thread
+  }
+  
+  // Get disk stats
+  diskFree, diskTotal := getDiskStats()
+  
+  // Get memory stats
+  memUsed, memTotal := getMemoryStats()
+  
   return SystemStats{
-    DownloadRate:  1024 * 1024 * 2,
-    UploadRate:    1024 * 256,
-    DiskFree:      1024 * 1024 * 1024 * 120,
-    DiskTotal:     1024 * 1024 * 1024 * 500,
-    MemUsed:       1024 * 1024 * 1024 * 4,
-    MemTotal:      1024 * 1024 * 1024 * 16,
-    ActiveThreads: 3,
+    DownloadRate:  totalDownloadRate,
+    UploadRate:    totalUploadRate,
+    DiskFree:      diskFree,
+    DiskTotal:     diskTotal,
+    MemUsed:       memUsed,
+    MemTotal:      memTotal,
+    ActiveThreads: activeThreads,
   }
 }
 
@@ -360,4 +410,94 @@ func formatDuration(d time.Duration) string {
     return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds())%60)
   }
   return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
+}
+
+// Progress tracking integration
+var (
+  progressTrackers = make(map[string]*progress.Tracker)
+  metricsCollectors = make(map[string]*progress.MetricsCollector)
+  trackerMu sync.RWMutex
+)
+
+// getProgressTracker returns the progress tracker for a session
+func getProgressTracker(sessionID string) *progress.Tracker {
+  trackerMu.RLock()
+  defer trackerMu.RUnlock()
+  return progressTrackers[sessionID]
+}
+
+// getMetricsCollector returns the metrics collector for a session
+func getMetricsCollector(sessionID string) *progress.MetricsCollector {
+  trackerMu.RLock()
+  defer trackerMu.RUnlock()
+  return metricsCollectors[sessionID]
+}
+
+// RegisterProgressTracker registers a progress tracker for a session
+func RegisterProgressTracker(sessionID string, tracker *progress.Tracker, 
+  metrics *progress.MetricsCollector) {
+  trackerMu.Lock()
+  defer trackerMu.Unlock()
+  progressTrackers[sessionID] = tracker
+  metricsCollectors[sessionID] = metrics
+}
+
+// UnregisterProgressTracker removes a progress tracker for a session
+func UnregisterProgressTracker(sessionID string) {
+  trackerMu.Lock()
+  defer trackerMu.Unlock()
+  delete(progressTrackers, sessionID)
+  delete(metricsCollectors, sessionID)
+}
+
+// getRecentFiles returns recently completed files for a session
+func getRecentFiles(sessionID string, limit int) []CompletedFile {
+  stateManager := state.GetManager()
+  if stateManager == nil {
+    return nil
+  }
+  
+  // Get recent files from state
+  files, err := stateManager.GetRecentFiles(sessionID, limit)
+  if err != nil {
+    return nil
+  }
+  
+  completedFiles := make([]CompletedFile, 0, len(files))
+  for _, file := range files {
+    completedFiles = append(completedFiles, CompletedFile{
+      Name: file.Name,
+      Size: file.Size,
+    })
+  }
+  
+  return completedFiles
+}
+
+// getDiskStats returns disk usage statistics
+func getDiskStats() (free, total int64) {
+  // TODO: Implement actual disk stats using syscall
+  // For now, return placeholder values
+  return 1024 * 1024 * 1024 * 120, 1024 * 1024 * 1024 * 500
+}
+
+// getMemoryStats returns memory usage statistics
+func getMemoryStats() (used, total int64) {
+  // TODO: Implement actual memory stats using runtime
+  // For now, return placeholder values
+  var m runtime.MemStats
+  runtime.ReadMemStats(&m)
+  return int64(m.Alloc), int64(m.Sys)
+}
+
+// SyncSession represents a completed sync session
+type SyncSession struct {
+  ID         string
+  StartTime  time.Time
+  EndTime    time.Time
+  Duration   time.Duration
+  TotalFiles int
+  TotalBytes int64
+  Failed     bool
+  Cancelled  bool
 }

@@ -252,3 +252,9 @@ type FileStats struct {
   PendingCount    int64 `db:"pending_count" json:"pending_count"`
   DownloadingCount int64 `db:"downloading_count" json:"downloading_count"`
 }
+
+// Helper functions for creating nullable types
+var (
+  NewNullString func(string) sql.NullString
+  NewNullTime   func(time.Time) sql.NullTime
+)
