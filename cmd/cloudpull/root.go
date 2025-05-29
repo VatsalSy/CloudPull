@@ -47,6 +47,7 @@ func init() {
 
   // Add commands
   rootCmd.AddCommand(initCmd)
+  rootCmd.AddCommand(authCmd)
   rootCmd.AddCommand(syncCmd)
   rootCmd.AddCommand(resumeCmd)
   rootCmd.AddCommand(statusCmd)

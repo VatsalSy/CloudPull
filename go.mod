@@ -1,4 +1,4 @@
-module github.com/yourusername/cloudpull
+module github.com/VatsalSy/CloudPull
 
 go 1.21
 

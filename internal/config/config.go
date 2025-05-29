@@ -8,6 +8,7 @@ import (
   "sync"
 
   "github.com/spf13/viper"
+  "time"
 )
 
 var (
@@ -24,6 +25,12 @@ type Config struct {
   // Sync settings
   Sync SyncConfig `mapstructure:"sync"`
 
+  // API settings
+  API APIConfig `mapstructure:"api"`
+
+  // Error handling
+  Errors ErrorConfig `mapstructure:"errors"`
+
   // File handling
   Files FileConfig `mapstructure:"files"`
 
@@ -32,17 +39,29 @@ type Config struct {
 
   // Logging
   Log LogConfig `mapstructure:"log"`
+
+  // Application
+  Version string `mapstructure:"version"`
 }
 
 // SyncConfig contains sync-related settings
 type SyncConfig struct {
-  DefaultDirectory string `mapstructure:"default_directory"`
-  MaxConcurrent    int    `mapstructure:"max_concurrent"`
-  ChunkSize        string `mapstructure:"chunk_size"`
-  BandwidthLimit   int    `mapstructure:"bandwidth_limit"` // MB/s, 0 = unlimited
-  ResumeOnFailure  bool   `mapstructure:"resume_on_failure"`
-  RetryAttempts    int    `mapstructure:"retry_attempts"`
-  RetryDelay       int    `mapstructure:"retry_delay"` // seconds
+  DefaultDirectory    string `mapstructure:"default_directory"`
+  MaxConcurrent       int    `mapstructure:"max_concurrent"`
+  ChunkSize          string `mapstructure:"chunk_size"`
+  ChunkSizeBytes     int64  `mapstructure:"chunk_size_bytes"`
+  BandwidthLimit     int    `mapstructure:"bandwidth_limit"` // MB/s, 0 = unlimited
+  ResumeOnFailure    bool   `mapstructure:"resume_on_failure"`
+  RetryAttempts      int    `mapstructure:"retry_attempts"`
+  RetryDelay         int    `mapstructure:"retry_delay"` // seconds
+  MaxDepth           int    `mapstructure:"max_depth"`
+  BatchSize          int    `mapstructure:"batch_size"`
+  WalkerConcurrent   int    `mapstructure:"walker_concurrent"`
+  QueueSize          int    `mapstructure:"queue_size"`
+  ProgressInterval   int    `mapstructure:"progress_interval"` // seconds
+  CheckpointInterval int    `mapstructure:"checkpoint_interval"` // seconds
+  MaxErrors          int    `mapstructure:"max_errors"`
+  MaxRetries         int    `mapstructure:"max_retries"`
 }
 
 // FileConfig contains file handling settings
@@ -66,6 +85,8 @@ type CacheConfig struct {
 // LogConfig contains logging settings
 type LogConfig struct {
   Level      string `mapstructure:"level"` // debug, info, warn, error
+  Format     string `mapstructure:"format"` // json, text
+  Output     string `mapstructure:"output"` // stdout, stderr, file
   File       string `mapstructure:"file"`
   MaxSize    int    `mapstructure:"max_size"`    // MB
   MaxBackups int    `mapstructure:"max_backups"`
@@ -73,10 +94,31 @@ type LogConfig struct {
   Compress   bool   `mapstructure:"compress"`
 }
 
+// APIConfig contains API-related settings
+type APIConfig struct {
+  MaxRetries      int `mapstructure:"max_retries"`
+  RetryDelay      int `mapstructure:"retry_delay"` // seconds
+  RequestTimeout  int `mapstructure:"request_timeout"` // seconds
+  MaxConcurrent   int `mapstructure:"max_concurrent"`
+  RateLimitPerSec int `mapstructure:"rate_limit"`
+}
+
+// ErrorConfig contains error handling settings
+type ErrorConfig struct {
+  MaxRetries      int     `mapstructure:"max_retries"`
+  RetryDelay      int     `mapstructure:"retry_delay"` // seconds
+  RetryMultiplier float64 `mapstructure:"retry_multiplier"`
+  RetryMaxDelay   int     `mapstructure:"retry_max_delay"` // seconds
+}
+
 // Load initializes and loads the configuration
-func Load(cfgFile string) (*Config, error) {
+func Load(cfgFile ...string) (*Config, error) {
   once.Do(func() {
-    initViper(cfgFile)
+    configFile := ""
+    if len(cfgFile) > 0 {
+      configFile = cfgFile[0]
+    }
+    initViper(configFile)
   })
 
   config = &Config{}
@@ -151,6 +193,14 @@ func setViperDefaults() {
   viper.SetDefault("sync.resume_on_failure", true)
   viper.SetDefault("sync.retry_attempts", 3)
   viper.SetDefault("sync.retry_delay", 5)
+  viper.SetDefault("sync.max_depth", -1)
+  viper.SetDefault("sync.batch_size", 100)
+  viper.SetDefault("sync.walker_concurrent", 5)
+  viper.SetDefault("sync.queue_size", 1000)
+  viper.SetDefault("sync.progress_interval", 1)
+  viper.SetDefault("sync.checkpoint_interval", 30)
+  viper.SetDefault("sync.max_errors", 100)
+  viper.SetDefault("sync.max_retries", 3)
 
   // File defaults
   viper.SetDefault("files.skip_duplicates", true)
@@ -173,11 +223,29 @@ func setViperDefaults() {
 
   // Log defaults
   viper.SetDefault("log.level", "info")
+  viper.SetDefault("log.format", "text")
+  viper.SetDefault("log.output", "stdout")
   viper.SetDefault("log.file", "")
   viper.SetDefault("log.max_size", 10)
   viper.SetDefault("log.max_backups", 3)
   viper.SetDefault("log.max_age", 7)
   viper.SetDefault("log.compress", true)
+
+  // API defaults
+  viper.SetDefault("api.max_retries", 3)
+  viper.SetDefault("api.retry_delay", 5)
+  viper.SetDefault("api.request_timeout", 30)
+  viper.SetDefault("api.max_concurrent", 10)
+  viper.SetDefault("api.rate_limit", 10)
+
+  // Error defaults
+  viper.SetDefault("errors.max_retries", 3)
+  viper.SetDefault("errors.retry_delay", 1)
+  viper.SetDefault("errors.retry_multiplier", 2.0)
+  viper.SetDefault("errors.retry_max_delay", 60)
+
+  // Version
+  viper.SetDefault("version", "1.0.0")
 }
 
 // setDefaults ensures all config fields have sensible defaults
@@ -253,4 +321,41 @@ func ConfigPath() string {
 func DataDir() string {
   home, _ := os.UserHomeDir()
   return filepath.Join(home, ".cloudpull")
+}
+
+// GetDataDir returns the CloudPull data directory
+func (c *Config) GetDataDir() string {
+  return DataDir()
+}
+
+// GetString returns a string value from viper
+func (c *Config) GetString(key string) string {
+  return viper.GetString(key)
+}
+
+// GetInt returns an int value from viper
+func (c *Config) GetInt(key string) int {
+  return viper.GetInt(key)
+}
+
+// GetInt64 returns an int64 value from viper
+func (c *Config) GetInt64(key string) int64 {
+  return viper.GetInt64(key)
+}
+
+// GetFloat64 returns a float64 value from viper
+func (c *Config) GetFloat64(key string) float64 {
+  return viper.GetFloat64(key)
+}
+
+// GetDuration returns a duration value from viper
+func (c *Config) GetDuration(key string) time.Duration {
+  // Get the value as int (seconds) and convert to duration
+  seconds := viper.GetInt(key)
+  return time.Duration(seconds) * time.Second
+}
+
+// GetLogLevel returns the log level
+func (c *Config) GetLogLevel() string {
+  return c.Log.Level
 }

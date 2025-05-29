@@ -1,12 +1,14 @@
 package main
 
 import (
+  "context"
   "fmt"
   "os"
-  "path/filepath"
   "time"
 
   "github.com/AlecAivazis/survey/v2"
+  "github.com/cloudpull/cloudpull/internal/app"
+  "github.com/cloudpull/cloudpull/internal/state"
   "github.com/fatih/color"
   "github.com/jedib0t/go-pretty/v6/table"
   "github.com/spf13/cobra"
@@ -44,48 +46,91 @@ func init() {
 }
 
 func runResume(cmd *cobra.Command, args []string) error {
+  // Initialize app
+  application, err := app.New()
+  if err != nil {
+    return fmt.Errorf("failed to create application: %w", err)
+  }
+
+  if err := application.Initialize(); err != nil {
+    return fmt.Errorf("failed to initialize application: %w", err)
+  }
+
+  if err := application.InitializeAuth(); err != nil {
+    return fmt.Errorf("not authenticated. Run 'cloudpull init' first")
+  }
+
+  if err := application.InitializeSyncEngine(); err != nil {
+    return fmt.Errorf("failed to initialize sync engine: %w", err)
+  }
+
   fmt.Println(color.CyanString("🔄 CloudPull Resume"))
   fmt.Println()
 
+  ctx := context.Background()
+
   // Get session to resume
-  var sessionID string
+  var session *state.Session
   if len(args) > 0 {
-    sessionID = args[0]
+    // Get specific session
+    sessions, err := application.GetSessions(ctx)
+    if err != nil {
+      return fmt.Errorf("failed to get sessions: %w", err)
+    }
+    for _, s := range sessions {
+      if s.ID == args[0] {
+        session = s
+        break
+      }
+    }
+    if session == nil {
+      return fmt.Errorf("session not found: %s", args[0])
+    }
   } else if resumeLatest {
-    sessionID = getLatestSession()
-    if sessionID == "" {
+    session, err = application.GetLatestSession(ctx)
+    if err != nil {
+      return fmt.Errorf("failed to get latest session: %w", err)
+    }
+    if session == nil {
       return fmt.Errorf("no interrupted sessions found")
     }
   } else {
     // Show session list
-    sessionID = selectSession()
-    if sessionID == "" {
+    session, err = selectSessionFromApp(ctx, application)
+    if err != nil {
+      return err
+    }
+    if session == nil {
       return fmt.Errorf("no session selected")
     }
   }
 
-  // Load session details
-  session := loadSession(sessionID)
-  if session == nil {
-    return fmt.Errorf("session not found: %s", sessionID)
-  }
 
   // Display session info
   fmt.Println(color.YellowString("Session Details:"))
   fmt.Printf("  ID: %s\n", session.ID)
   fmt.Printf("  Started: %s\n", session.StartTime.Format("Jan 2, 2006 3:04 PM"))
-  fmt.Printf("  Source: %s\n", session.SourceFolder)
-  fmt.Printf("  Destination: %s\n", session.DestPath)
-  fmt.Printf("  Progress: %d/%d files (%.1f%%)\n", 
-    session.CompletedFiles, session.TotalFiles,
-    float64(session.CompletedFiles)/float64(session.TotalFiles)*100)
-  fmt.Printf("  Downloaded: %s of %s\n", 
-    formatBytes(session.DownloadedBytes), formatBytes(session.TotalBytes))
+  fmt.Printf("  Source: %s\n", session.RootFolderName.String)
+  fmt.Printf("  Destination: %s\n", session.DestinationPath)
+  if session.TotalFiles > 0 {
+    fmt.Printf("  Progress: %d/%d files (%.1f%%)\n", 
+      session.CompletedFiles, session.TotalFiles,
+      float64(session.CompletedFiles)/float64(session.TotalFiles)*100)
+    fmt.Printf("  Downloaded: %s of %s\n", 
+      formatBytes(session.CompletedBytes), formatBytes(session.TotalBytes))
+  } else {
+    fmt.Printf("  Progress: %d files completed\n", session.CompletedFiles)
+  }
   fmt.Println()
 
-  // Check session health
-  if !session.IsHealthy && !forceResume {
-    fmt.Println(color.RedString("⚠️  Warning: Session appears corrupted"))
+  // Check session status
+  if session.Status == state.SessionStatusCompleted {
+    fmt.Println(color.YellowString("⚠️  Warning: Session is already completed"))
+    return nil
+  }
+
+  if session.Status == state.SessionStatusFailed && !forceResume {
+    fmt.Println(color.RedString("⚠️  Warning: Session failed previously"))
     var proceed bool
     prompt := &survey.Confirm{
       Message: "Attempt to resume anyway?",
@@ -108,34 +153,43 @@ func runResume(cmd *cobra.Command, args []string) error {
     return nil
   }
 
-  // Resume sync
-  return resumeSync(session)
+  // Resume sync with progress monitoring
+  errChan := make(chan error, 1)
+  
+  go func() {
+    errChan <- application.ResumeSync(ctx, session.ID)
+  }()
+
+  // Monitor progress
+  go monitorResumeProgress(application)
+
+  // Wait for completion
+  if err := <-errChan; err != nil {
+    return fmt.Errorf("resume failed: %w", err)
+  }
+
+  fmt.Println(color.GreenString("\n✅ Sync resumed successfully!"))
+  return nil
 }
 
-type SyncSession struct {
-  ID              string
-  StartTime       time.Time
-  SourceFolder    string
-  DestPath        string
-  TotalFiles      int
-  CompletedFiles  int
-  TotalBytes      int64
-  DownloadedBytes int64
-  IsHealthy       bool
-  LastActivity    time.Time
-}
 
-func getLatestSession() string {
-  // TODO: Implement session storage
-  // This is a placeholder
-  return "session_2024_01_20_143052"
-}
+func selectSessionFromApp(ctx context.Context, app *app.App) (*state.Session, error) {
+  sessions, err := app.GetSessions(ctx)
+  if err != nil {
+    return nil, fmt.Errorf("failed to get sessions: %w", err)
+  }
 
-func selectSession() string {
-  sessions := listSessions()
-  if len(sessions) == 0 {
-    fmt.Println(color.YellowString("No interrupted sessions found."))
-    return ""
+  // Filter out completed sessions
+  var resumableSessions []*state.Session
+  for _, s := range sessions {
+    if s.Status != state.SessionStatusCompleted && s.Status != state.SessionStatusCancelled {
+      resumableSessions = append(resumableSessions, s)
+    }
+  }
+
+  if len(resumableSessions) == 0 {
+    fmt.Println(color.YellowString("No resumable sessions found."))
+    return nil, nil
   }
 
   // Create table
@@ -143,39 +197,52 @@ func selectSession() string {
   t.SetOutputMirror(os.Stdout)
   t.AppendHeader(table.Row{"#", "Session ID", "Started", "Progress", "Size", "Status"})
 
-  options := make([]string, len(sessions))
-  for i, session := range sessions {
-    progress := fmt.Sprintf("%d/%d (%.0f%%)", 
-      session.CompletedFiles, session.TotalFiles,
-      float64(session.CompletedFiles)/float64(session.TotalFiles)*100)
+  options := make([]string, len(resumableSessions))
+  for i, session := range resumableSessions {
+    progress := "N/A"
+    if session.TotalFiles > 0 {
+      progress = fmt.Sprintf("%d/%d (%.0f%%)", 
+        session.CompletedFiles, session.TotalFiles,
+        float64(session.CompletedFiles)/float64(session.TotalFiles)*100)
+    } else {
+      progress = fmt.Sprintf("%d files", session.CompletedFiles)
+    }
     
-    size := fmt.Sprintf("%s/%s", 
-      formatBytes(session.DownloadedBytes), 
-      formatBytes(session.TotalBytes))
+    size := "N/A"
+    if session.TotalBytes > 0 {
+      size = fmt.Sprintf("%s/%s", 
+        formatBytes(session.CompletedBytes), 
+        formatBytes(session.TotalBytes))
+    } else if session.CompletedBytes > 0 {
+      size = formatBytes(session.CompletedBytes)
+    }
 
-    status := "Healthy"
-    if !session.IsHealthy {
-      status = color.RedString("Corrupted")
-    } else if time.Since(session.LastActivity) > 24*time.Hour {
-      status = color.YellowString("Stale")
+    statusColor := session.Status
+    switch session.Status {
+    case state.SessionStatusFailed:
+      statusColor = color.RedString(session.Status)
+    case state.SessionStatusPaused:
+      statusColor = color.YellowString(session.Status)
+    case state.SessionStatusActive:
+      statusColor = color.GreenString(session.Status)
     }
 
     t.AppendRow(table.Row{
       i + 1,
-      session.ID,
+      session.ID[:8] + "...",
       session.StartTime.Format("Jan 2 15:04"),
       progress,
       size,
-      status,
+      statusColor,
     })
 
     options[i] = fmt.Sprintf("%s - %s (%s)", 
-      session.ID,
+      session.ID[:8],
       session.StartTime.Format("Jan 2 15:04"),
       progress)
   }
 
-  fmt.Println("Interrupted Sessions:")
+  fmt.Println("Resumable Sessions:")
   t.Render()
   fmt.Println()
 
@@ -187,80 +254,48 @@ func selectSession() string {
   survey.AskOne(prompt, &selected)
 
   if selected != "" {
-    return sessions[getSelectedIndex(selected)].ID
-  }
-  return ""
-}
-
-func listSessions() []SyncSession {
-  // TODO: Implement actual session listing
-  // This is placeholder data
-  return []SyncSession{
-    {
-      ID:              "session_2024_01_20_143052",
-      StartTime:       time.Now().Add(-2 * time.Hour),
-      SourceFolder:    "Project Files",
-      DestPath:        "~/CloudPull/ProjectFiles",
-      TotalFiles:      150,
-      CompletedFiles:  87,
-      TotalBytes:      1024 * 1024 * 500,
-      DownloadedBytes: 1024 * 1024 * 287,
-      IsHealthy:       true,
-      LastActivity:    time.Now().Add(-30 * time.Minute),
-    },
-    {
-      ID:              "session_2024_01_19_091523",
-      StartTime:       time.Now().Add(-26 * time.Hour),
-      SourceFolder:    "Photos 2023",
-      DestPath:        "~/Pictures/Photos2023",
-      TotalFiles:      1250,
-      CompletedFiles:  443,
-      TotalBytes:      1024 * 1024 * 1024 * 5,
-      DownloadedBytes: 1024 * 1024 * 1024 * 2,
-      IsHealthy:       true,
-      LastActivity:    time.Now().Add(-25 * time.Hour),
-    },
-  }
-}
-
-func loadSession(id string) *SyncSession {
-  // TODO: Load from actual storage
-  sessions := listSessions()
-  for _, s := range sessions {
-    if s.ID == id {
-      return &s
+    // Extract index from selection
+    for i, opt := range options {
+      if opt == selected {
+        return resumableSessions[i], nil
+      }
     }
   }
-  return nil
+  return nil, nil
 }
 
-func getSelectedIndex(selected string) int {
-  // Extract index from selection
-  for i := 0; i < len(selected); i++ {
-    if selected[i] == ' ' {
-      return i
+func monitorResumeProgress(app *app.App) {
+  ticker := time.NewTicker(100 * time.Millisecond)
+  defer ticker.Stop()
+
+  lastFiles := int64(0)
+  lastUpdate := time.Now()
+
+  for {
+    progress := app.GetProgress()
+    if progress == nil {
+      time.Sleep(time.Second)
+      continue
     }
+
+    // Update progress every second or on file completion
+    if progress.CompletedFiles > lastFiles || time.Since(lastUpdate) > time.Second {
+      fmt.Printf("\rProgress: %d/%d files (%.1f%%) | Speed: %s/s | Active: %d", 
+        progress.CompletedFiles, progress.TotalFiles,
+        float64(progress.CompletedFiles)/float64(progress.TotalFiles)*100,
+        formatBytes(progress.CurrentSpeed),
+        progress.ActiveDownloads)
+      lastFiles = progress.CompletedFiles
+      lastUpdate = time.Now()
+    }
+
+    // Check if complete
+    if progress.Status == "stopped" {
+      fmt.Println() // New line after progress
+      break
+    }
+
+    <-ticker.C
   }
-  return 0
 }
 
-func resumeSync(session *SyncSession) error {
-  fmt.Println(color.GreenString("\n🚀 Resuming sync..."))
-  fmt.Printf("Continuing from file %d of %d\n\n", 
-    session.CompletedFiles+1, session.TotalFiles)
-
-  // TODO: Implement actual resume logic
-  // This is a simulation
-  remainingFiles := session.TotalFiles - session.CompletedFiles
-  for i := 0; i < remainingFiles && i < 5; i++ {
-    fmt.Printf("Downloading file %d/%d... ", 
-      session.CompletedFiles+i+1, session.TotalFiles)
-    time.Sleep(500 * time.Millisecond)
-    fmt.Println("✓")
-  }
-
-  fmt.Println(color.GreenString("\n✅ Sync resumed successfully!"))
-  fmt.Printf("Downloaded %d additional files\n", remainingFiles)
-
-  return nil
-}

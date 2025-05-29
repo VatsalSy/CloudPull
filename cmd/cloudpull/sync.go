@@ -1,6 +1,7 @@
 package main
 
 import (
+  "context"
   "fmt"
   "os"
   "path/filepath"
@@ -8,6 +9,8 @@ import (
   "time"
 
   "github.com/AlecAivazis/survey/v2"
+  "github.com/cloudpull/cloudpull/internal/app"
+  "github.com/cloudpull/cloudpull/internal/sync"
   "github.com/fatih/color"
   "github.com/schollz/progressbar/v3"
   "github.com/spf13/cobra"
@@ -62,9 +65,22 @@ func init() {
 }
 
 func runSync(cmd *cobra.Command, args []string) error {
-  // Check authentication
-  if !isAuthenticated() {
+  // Initialize app
+  application, err := app.New()
+  if err != nil {
+    return fmt.Errorf("failed to create application: %w", err)
+  }
+
+  if err := application.Initialize(); err != nil {
+    return fmt.Errorf("failed to initialize application: %w", err)
+  }
+
+  if err := application.InitializeAuth(); err != nil {
     return fmt.Errorf("not authenticated. Run 'cloudpull init' first")
+  }
+
+  if err := application.InitializeSyncEngine(); err != nil {
+    return fmt.Errorf("failed to initialize sync engine: %w", err)
   }
 
   fmt.Println(color.CyanString("📂 CloudPull Sync"))
@@ -123,8 +139,34 @@ func runSync(cmd *cobra.Command, args []string) error {
     return fmt.Errorf("failed to create output directory: %w", err)
   }
 
-  // Start sync
-  return performSync(folderID, outputDir)
+  // Prepare sync options
+  syncOptions := &app.SyncOptions{
+    IncludePatterns: includePattern,
+    ExcludePatterns: excludePattern,
+    MaxDepth:        maxDepth,
+    DryRun:          dryRun,
+  }
+
+  // Start sync with progress monitoring
+  ctx := context.Background()
+  errChan := make(chan error, 1)
+  
+  go func() {
+    errChan <- application.StartSync(ctx, folderID, outputDir, syncOptions)
+  }()
+
+  // Monitor progress
+  if !noProgress && !dryRun {
+    go monitorSyncProgress(application)
+  }
+
+  // Wait for completion
+  if err := <-errChan; err != nil {
+    return fmt.Errorf("sync failed: %w", err)
+  }
+
+  fmt.Println(color.GreenString("\n✅ Sync completed successfully!"))
+  return nil
 }
 
 func extractFolderID(input string) string {
@@ -153,79 +195,56 @@ func selectDriveFolder() string {
   return extractFolderID(folderID)
 }
 
-func isAuthenticated() bool {
-  // TODO: Check if OAuth token exists and is valid
-  return viper.GetString("credentials_file") != ""
-}
+func monitorSyncProgress(app *app.App) {
+  ticker := time.NewTicker(100 * time.Millisecond)
+  defer ticker.Stop()
 
-func performSync(folderID, outputDir string) error {
-  fmt.Println(color.GreenString("\n🚀 Starting sync..."))
+  var bar *progressbar.ProgressBar
+  lastFiles := int64(0)
 
-  // TODO: Implement actual Drive API sync
-  // This is a simulation
-  files := []struct {
-    name string
-    size int64
-  }{
-    {"Document.pdf", 1024 * 1024 * 2},
-    {"Presentation.pptx", 1024 * 1024 * 5},
-    {"Spreadsheet.xlsx", 1024 * 512},
-    {"Image.jpg", 1024 * 1024 * 3},
-  }
-
-  if dryRun {
-    fmt.Println("\nFiles that would be synced:")
-    totalSize := int64(0)
-    for _, file := range files {
-      fmt.Printf("  • %s (%s)\n", file.name, formatBytes(file.size))
-      totalSize += file.size
+  for {
+    progress := app.GetProgress()
+    if progress == nil {
+      time.Sleep(time.Second)
+      continue
     }
-    fmt.Printf("\nTotal: %d files, %s\n", len(files), formatBytes(totalSize))
-    return nil
-  }
 
-  // Progress tracking
-  totalFiles := len(files)
-  completedFiles := 0
-
-  fmt.Printf("\nSyncing %d files...\n\n", totalFiles)
-
-  for _, file := range files {
-    if !noProgress {
-      bar := progressbar.NewOptions64(
-        file.size,
-        progressbar.OptionSetDescription(fmt.Sprintf("[%d/%d] %s", 
-          completedFiles+1, totalFiles, file.name)),
+    // Initialize progress bar on first update
+    if bar == nil && progress.TotalFiles > 0 {
+      bar = progressbar.NewOptions64(
+        progress.TotalFiles,
+        progressbar.OptionSetDescription("Syncing files"),
         progressbar.OptionSetWidth(40),
-        progressbar.OptionShowBytes(true),
         progressbar.OptionShowCount(),
+        progressbar.OptionShowIts(),
+        progressbar.OptionSetItsString("files"),
         progressbar.OptionOnCompletion(func() {
           fmt.Print("\n")
         }),
         progressbar.OptionSpinnerType(14),
         progressbar.OptionFullWidth(),
+        progressbar.OptionSetRenderBlankState(true),
       )
-
-      // Simulate download
-      for i := int64(0); i < file.size; i += 1024 * 100 {
-        bar.Add(1024 * 100)
-        time.Sleep(10 * time.Millisecond)
-      }
-      bar.Finish()
-    } else {
-      fmt.Printf("Downloading %s... ", file.name)
-      time.Sleep(500 * time.Millisecond)
-      fmt.Println("✓")
     }
-    
-    completedFiles++
+
+    // Update progress
+    if bar != nil && progress.CompletedFiles > lastFiles {
+      bar.Set64(progress.CompletedFiles)
+      lastFiles = progress.CompletedFiles
+    }
+
+    // Check if complete
+    if progress.Status == "stopped" {
+      if bar != nil {
+        bar.Finish()
+      }
+      break
+    }
+
+    <-ticker.C
   }
-
-  fmt.Println(color.GreenString("\n✅ Sync completed successfully!"))
-  fmt.Printf("Downloaded %d files to %s\n", completedFiles, outputDir)
-
-  return nil
 }
+
 
 func formatBytes(bytes int64) string {
   const unit = 1024

@@ -1,11 +1,14 @@
 package main
 
 import (
+  "context"
   "fmt"
   "os"
   "path/filepath"
+  "strings"
 
   "github.com/AlecAivazis/survey/v2"
+  "github.com/cloudpull/cloudpull/internal/app"
   "github.com/fatih/color"
   "github.com/spf13/cobra"
   "github.com/spf13/viper"
@@ -153,6 +156,7 @@ func runInit(cmd *cobra.Command, args []string) error {
   viper.Set("sync.default_directory", config.DefaultSyncDir)
   viper.Set("sync.max_concurrent", config.MaxConcurrent)
   viper.Set("sync.chunk_size", config.ChunkSize)
+  viper.Set("sync.chunk_size_bytes", parseChunkSize(config.ChunkSize))
   if config.EnableBandwidth {
     viper.Set("sync.bandwidth_limit", config.BandwidthLimit)
   }
@@ -171,8 +175,25 @@ func runInit(cmd *cobra.Command, args []string) error {
   fmt.Println("CloudPull needs to authenticate with Google Drive.")
   
   if !skipBrowser {
-    fmt.Println("A browser window will open for authentication...")
-    // TODO: Implement OAuth2 flow
+    // Initialize app
+    application, err := app.New()
+    if err != nil {
+      return fmt.Errorf("failed to create application: %w", err)
+    }
+
+    if err := application.Initialize(); err != nil {
+      return fmt.Errorf("failed to initialize application: %w", err)
+    }
+
+    if err := application.InitializeAuth(); err != nil {
+      return fmt.Errorf("failed to initialize authentication: %w", err)
+    }
+
+    // Perform authentication
+    fmt.Println("\nStarting authentication flow...")
+    if err := application.Authenticate(context.Background()); err != nil {
+      return fmt.Errorf("authentication failed: %w", err)
+    }
   } else {
     fmt.Println("Run 'cloudpull auth' to complete authentication.")
   }
@@ -184,4 +205,24 @@ func runInit(cmd *cobra.Command, args []string) error {
   fmt.Println("  • Run 'cloudpull --help' for more commands")
 
   return nil
+}
+
+func parseChunkSize(size string) int64 {
+  size = strings.ToUpper(strings.TrimSpace(size))
+  multiplier := int64(1)
+  
+  if strings.HasSuffix(size, "KB") {
+    multiplier = 1024
+    size = strings.TrimSuffix(size, "KB")
+  } else if strings.HasSuffix(size, "MB") {
+    multiplier = 1024 * 1024
+    size = strings.TrimSuffix(size, "MB")
+  } else if strings.HasSuffix(size, "GB") {
+    multiplier = 1024 * 1024 * 1024
+    size = strings.TrimSuffix(size, "GB")
+  }
+  
+  var value int64
+  fmt.Sscanf(size, "%d", &value)
+  return value * multiplier
 }

@@ -1,113 +1,206 @@
 # CloudPull Makefile
+# Build, test, and manage the CloudPull application
 
 # Variables
 BINARY_NAME=cloudpull
-BINARY_DIR=bin
-CMD_DIR=cmd/cloudpull
-VERSION=$(shell git describe --tags --always --dirty)
-BUILD_TIME=$(shell date +%Y%m%d-%H%M%S)
+MAIN_PATH=cmd/cloudpull
+BUILD_DIR=build
+VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 LDFLAGS=-ldflags "-X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}"
 
-# Go parameters
+# Go commands
 GOCMD=go
 GOBUILD=$(GOCMD) build
-GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test
-GOGET=$(GOCMD) get
+GOVET=$(GOCMD) vet
+GOFMT=$(GOCMD) fmt
 GOMOD=$(GOCMD) mod
+GORUN=$(GOCMD) run
 
-# Targets
-.PHONY: all build clean test deps run install uninstall
+# Default target
+.DEFAULT_GOAL := help
 
-all: clean deps build
+.PHONY: help
+help: ## Show this help message
+	@echo 'Usage: make [target]'
+	@echo ''
+	@echo 'Targets:'
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-build:
+.PHONY: build
+build: ## Build the CloudPull binary
 	@echo "Building CloudPull..."
-	@mkdir -p $(BINARY_DIR)
-	$(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME) $(CMD_DIR)
-	@echo "Build complete: $(BINARY_DIR)/$(BINARY_NAME)"
+	@mkdir -p $(BUILD_DIR)
+	$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./$(MAIN_PATH)
+	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
 
-clean:
-	@echo "Cleaning..."
-	$(GOCLEAN)
-	@rm -rf $(BINARY_DIR)
+.PHONY: install
+install: build ## Install CloudPull to GOPATH/bin
+	@echo "Installing CloudPull..."
+	@cp $(BUILD_DIR)/$(BINARY_NAME) $(GOPATH)/bin/
+	@echo "CloudPull installed to $(GOPATH)/bin/$(BINARY_NAME)"
 
-test:
+.PHONY: run
+run: ## Run CloudPull directly
+	$(GORUN) ./$(MAIN_PATH) $(ARGS)
+
+.PHONY: test
+test: ## Run all tests
 	@echo "Running tests..."
-	$(GOTEST) -v ./...
+	$(GOTEST) -v -race -cover ./...
 
-deps:
+.PHONY: test-unit
+test-unit: ## Run unit tests only
+	@echo "Running unit tests..."
+	$(GOTEST) -v -race -short ./...
+
+.PHONY: test-integration
+test-integration: ## Run integration tests
+	@echo "Running integration tests..."
+	$(GOTEST) -v -race -run Integration ./...
+
+.PHONY: test-coverage
+test-coverage: ## Run tests with coverage report
+	@echo "Running tests with coverage..."
+	$(GOTEST) -v -race -coverprofile=coverage.out ./...
+	$(GOCMD) tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+.PHONY: benchmark
+benchmark: ## Run benchmarks
+	@echo "Running benchmarks..."
+	$(GOTEST) -bench=. -benchmem ./...
+
+.PHONY: lint
+lint: ## Run linters
+	@echo "Running linters..."
+	@if command -v golangci-lint &> /dev/null; then \
+		golangci-lint run; \
+	else \
+		echo "golangci-lint not installed. Run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
+	fi
+
+.PHONY: fmt
+fmt: ## Format code
+	@echo "Formatting code..."
+	$(GOFMT) ./...
+
+.PHONY: vet
+vet: ## Run go vet
+	@echo "Running go vet..."
+	$(GOVET) ./...
+
+.PHONY: clean
+clean: ## Clean build artifacts
+	@echo "Cleaning..."
+	@rm -rf $(BUILD_DIR)
+	@rm -f coverage.out coverage.html
+	@echo "Clean complete"
+
+.PHONY: deps
+deps: ## Download dependencies
 	@echo "Downloading dependencies..."
 	$(GOMOD) download
 	$(GOMOD) tidy
 
-run: build
-	@echo "Running CloudPull..."
-	./$(BINARY_DIR)/$(BINARY_NAME)
+.PHONY: update-deps
+update-deps: ## Update dependencies
+	@echo "Updating dependencies..."
+	$(GOMOD) get -u ./...
+	$(GOMOD) tidy
 
-install: build
-	@echo "Installing CloudPull..."
-	@cp $(BINARY_DIR)/$(BINARY_NAME) /usr/local/bin/
-	@echo "CloudPull installed to /usr/local/bin/$(BINARY_NAME)"
-	@echo "Run 'cloudpull init' to get started"
-
-uninstall:
-	@echo "Uninstalling CloudPull..."
-	@rm -f /usr/local/bin/$(BINARY_NAME)
-	@echo "CloudPull uninstalled"
+.PHONY: verify
+verify: fmt vet test ## Run fmt, vet, and tests
+	@echo "Verification complete"
 
 # Development helpers
-.PHONY: fmt vet lint
 
-fmt:
-	@echo "Formatting code..."
-	@gofmt -s -w .
+.PHONY: dev-init
+dev-init: ## Initialize development environment
+	@echo "Initializing development environment..."
+	@mkdir -p ~/.cloudpull
+	@echo "Creating example config..."
+	@cp -n examples/config.yaml ~/.cloudpull/config.yaml || true
+	@echo "Development environment ready"
 
-vet:
-	@echo "Running go vet..."
-	@go vet ./...
+.PHONY: dev-auth
+dev-auth: ## Run authentication flow
+	$(GORUN) ./$(MAIN_PATH) auth
 
-lint:
-	@echo "Running linter..."
-	@golangci-lint run
+.PHONY: dev-sync
+dev-sync: ## Run example sync
+	$(GORUN) ./$(MAIN_PATH) sync --output ~/CloudPull/DevTest
 
-# Build for multiple platforms
-.PHONY: build-all build-linux build-windows build-darwin
+.PHONY: example
+example: ## Run full sync example
+	$(GORUN) ./examples/full_sync_example.go $(ARGS)
 
-build-all: build-linux build-windows build-darwin
+# Docker targets
 
-build-linux:
-	@echo "Building for Linux..."
-	@mkdir -p $(BINARY_DIR)
-	GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME)-linux-amd64 $(CMD_DIR)
-	GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME)-linux-arm64 $(CMD_DIR)
+.PHONY: docker-build
+docker-build: ## Build Docker image
+	@echo "Building Docker image..."
+	docker build -t cloudpull:$(VERSION) .
 
-build-windows:
-	@echo "Building for Windows..."
-	@mkdir -p $(BINARY_DIR)
-	GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME)-windows-amd64.exe $(CMD_DIR)
+.PHONY: docker-run
+docker-run: ## Run CloudPull in Docker
+	docker run -it --rm \
+		-v ~/.cloudpull:/root/.cloudpull \
+		-v ~/CloudPull:/data \
+		cloudpull:$(VERSION) $(ARGS)
 
-build-darwin:
-	@echo "Building for macOS..."
-	@mkdir -p $(BINARY_DIR)
-	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME)-darwin-amd64 $(CMD_DIR)
-	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME)-darwin-arm64 $(CMD_DIR)
+# Release targets
 
-# Help
-help:
-	@echo "CloudPull Makefile"
-	@echo ""
-	@echo "Usage:"
-	@echo "  make              Build CloudPull"
-	@echo "  make build        Build the binary"
-	@echo "  make clean        Clean build artifacts"
-	@echo "  make test         Run tests"
-	@echo "  make deps         Download dependencies"
-	@echo "  make run          Build and run CloudPull"
-	@echo "  make install      Install CloudPull to /usr/local/bin"
-	@echo "  make uninstall    Uninstall CloudPull"
-	@echo "  make fmt          Format code"
-	@echo "  make vet          Run go vet"
-	@echo "  make lint         Run linter"
-	@echo "  make build-all    Build for all platforms"
-	@echo "  make help         Show this help message"
+.PHONY: release-dry
+release-dry: ## Dry run of release process
+	@echo "Dry run of release process..."
+	goreleaser release --snapshot --skip-publish --rm-dist
+
+.PHONY: release
+release: ## Create a new release
+	@echo "Creating release..."
+	@if [ -z "$(VERSION)" ]; then \
+		echo "VERSION is not set. Use: make release VERSION=v1.0.0"; \
+		exit 1; \
+	fi
+	git tag -a $(VERSION) -m "Release $(VERSION)"
+	git push origin $(VERSION)
+	goreleaser release --rm-dist
+
+# Database management
+
+.PHONY: db-migrate
+db-migrate: ## Run database migrations
+	@echo "Running database migrations..."
+	$(GORUN) ./$(MAIN_PATH) db migrate
+
+.PHONY: db-reset
+db-reset: ## Reset database
+	@echo "Resetting database..."
+	@rm -f ~/.cloudpull/cloudpull.db
+	@echo "Database reset complete"
+
+# Utility targets
+
+.PHONY: check-tools
+check-tools: ## Check required tools
+	@echo "Checking required tools..."
+	@command -v go >/dev/null 2>&1 || { echo "Go not installed"; exit 1; }
+	@command -v git >/dev/null 2>&1 || { echo "Git not installed"; exit 1; }
+	@echo "All required tools are installed"
+
+.PHONY: info
+info: ## Show build information
+	@echo "CloudPull Build Information:"
+	@echo "  Version: $(VERSION)"
+	@echo "  Build Time: $(BUILD_TIME)"
+	@echo "  Go Version: $(shell go version)"
+	@echo "  Platform: $(shell go env GOOS)/$(shell go env GOARCH)"
+
+# Shortcuts
+.PHONY: b t r c
+b: build ## Shortcut for build
+t: test ## Shortcut for test  
+r: run ## Shortcut for run
+c: clean ## Shortcut for clean

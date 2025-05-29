@@ -13,7 +13,10 @@
 package sync
 
 import (
+  "crypto/rand"
   "database/sql"
+  "encoding/hex"
+  "fmt"
   "time"
   
   "github.com/cloudpull/cloudpull/internal/state"
@@ -33,6 +36,15 @@ func NewNullTime(t time.Time) sql.NullTime {
     Time:  t,
     Valid: !t.IsZero(),
   }
+}
+
+// generateID generates a unique session ID
+func generateID() string {
+  timestamp := time.Now().Format("20060102_150405")
+  randomBytes := make([]byte, 4)
+  rand.Read(randomBytes)
+  randomHex := hex.EncodeToString(randomBytes)
+  return fmt.Sprintf("session_%s_%s", timestamp, randomHex)
 }
 
 // Extension method for state package compatibility
