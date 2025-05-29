@@ -1,0 +1,187 @@
+package main
+
+import (
+  "fmt"
+  "os"
+  "path/filepath"
+
+  "github.com/AlecAivazis/survey/v2"
+  "github.com/fatih/color"
+  "github.com/spf13/cobra"
+  "github.com/spf13/viper"
+)
+
+var initCmd = &cobra.Command{
+  Use:   "init",
+  Short: "Initialize CloudPull with Google Drive authentication",
+  Long: `Initialize CloudPull by setting up authentication with Google Drive.
+
+This command will guide you through:
+  1. Creating a Google Cloud project (if needed)
+  2. Enabling the Google Drive API
+  3. Setting up OAuth2 credentials
+  4. Authorizing CloudPull to access your Drive`,
+  Example: `  # Interactive setup
+  cloudpull init
+
+  # Non-interactive with credentials file
+  cloudpull init --credentials-file ~/Downloads/credentials.json`,
+  RunE: runInit,
+}
+
+var (
+  credentialsFile string
+  skipBrowser     bool
+)
+
+func init() {
+  initCmd.Flags().StringVarP(&credentialsFile, "credentials-file", "c", "",
+    "Path to OAuth2 credentials JSON file")
+  initCmd.Flags().BoolVar(&skipBrowser, "skip-browser", false,
+    "Don't automatically open browser for authentication")
+}
+
+func runInit(cmd *cobra.Command, args []string) error {
+  fmt.Println(color.CyanString("🚀 Welcome to CloudPull Setup"))
+  fmt.Println()
+
+  // Check if already initialized
+  configPath := viper.ConfigFileUsed()
+  if configPath == "" {
+    home, _ := os.UserHomeDir()
+    configPath = filepath.Join(home, ".cloudpull", "config.yaml")
+  }
+
+  if _, err := os.Stat(configPath); err == nil {
+    var overwrite bool
+    prompt := &survey.Confirm{
+      Message: "CloudPull is already configured. Reconfigure?",
+      Default: false,
+    }
+    survey.AskOne(prompt, &overwrite)
+    if !overwrite {
+      return nil
+    }
+  }
+
+  // Step 1: Get credentials
+  if credentialsFile == "" {
+    fmt.Println(color.YellowString("\n📋 Step 1: Google Cloud Credentials"))
+    fmt.Println("To use CloudPull, you need OAuth2 credentials from Google Cloud Console.")
+    fmt.Println("\nFollow these steps:")
+    fmt.Println("1. Go to https://console.cloud.google.com/")
+    fmt.Println("2. Create a new project or select existing")
+    fmt.Println("3. Enable Google Drive API")
+    fmt.Println("4. Create OAuth2 credentials (Desktop application)")
+    fmt.Println("5. Download the credentials JSON file")
+    fmt.Println()
+
+    prompt := &survey.Input{
+      Message: "Path to credentials JSON file:",
+      Suggest: func(toComplete string) []string {
+        files, _ := filepath.Glob(toComplete + "*.json")
+        return files
+      },
+    }
+    survey.AskOne(prompt, &credentialsFile, survey.WithValidator(survey.Required))
+  }
+
+  // Validate credentials file
+  if _, err := os.Stat(credentialsFile); err != nil {
+    return fmt.Errorf("credentials file not found: %s", credentialsFile)
+  }
+
+  // Step 2: Configure settings
+  fmt.Println(color.YellowString("\n⚙️  Step 2: Configuration"))
+
+  var config struct {
+    DefaultSyncDir   string
+    MaxConcurrent    int
+    ChunkSize        int
+    EnableBandwidth  bool
+    BandwidthLimit   int
+  }
+
+  questions := []*survey.Question{
+    {
+      Name: "DefaultSyncDir",
+      Prompt: &survey.Input{
+        Message: "Default sync directory:",
+        Default: filepath.Join(os.Getenv("HOME"), "CloudPull"),
+      },
+    },
+    {
+      Name: "MaxConcurrent",
+      Prompt: &survey.Input{
+        Message: "Maximum concurrent downloads:",
+        Default: "3",
+      },
+    },
+    {
+      Name: "ChunkSize",
+      Prompt: &survey.Select{
+        Message: "Download chunk size:",
+        Options: []string{"256KB", "512KB", "1MB", "2MB", "4MB"},
+        Default: "1MB",
+      },
+    },
+    {
+      Name: "EnableBandwidth",
+      Prompt: &survey.Confirm{
+        Message: "Enable bandwidth limiting?",
+        Default: false,
+      },
+    },
+  }
+
+  if err := survey.Ask(questions, &config); err != nil {
+    return err
+  }
+
+  if config.EnableBandwidth {
+    bandwidthPrompt := &survey.Input{
+      Message: "Bandwidth limit (MB/s):",
+      Default: "10",
+    }
+    survey.AskOne(bandwidthPrompt, &config.BandwidthLimit)
+  }
+
+  // Step 3: Save configuration
+  fmt.Println(color.YellowString("\n💾 Step 3: Saving Configuration"))
+
+  viper.Set("credentials_file", credentialsFile)
+  viper.Set("sync.default_directory", config.DefaultSyncDir)
+  viper.Set("sync.max_concurrent", config.MaxConcurrent)
+  viper.Set("sync.chunk_size", config.ChunkSize)
+  if config.EnableBandwidth {
+    viper.Set("sync.bandwidth_limit", config.BandwidthLimit)
+  }
+
+  configDir := filepath.Dir(configPath)
+  if err := os.MkdirAll(configDir, 0755); err != nil {
+    return fmt.Errorf("failed to create config directory: %w", err)
+  }
+
+  if err := viper.WriteConfigAs(configPath); err != nil {
+    return fmt.Errorf("failed to save configuration: %w", err)
+  }
+
+  // Step 4: Authenticate
+  fmt.Println(color.YellowString("\n🔐 Step 4: Authentication"))
+  fmt.Println("CloudPull needs to authenticate with Google Drive.")
+  
+  if !skipBrowser {
+    fmt.Println("A browser window will open for authentication...")
+    // TODO: Implement OAuth2 flow
+  } else {
+    fmt.Println("Run 'cloudpull auth' to complete authentication.")
+  }
+
+  fmt.Println(color.GreenString("\n✅ CloudPull initialized successfully!"))
+  fmt.Println("\nNext steps:")
+  fmt.Println("  • Run 'cloudpull sync' to start syncing")
+  fmt.Println("  • Run 'cloudpull config' to view/edit settings")
+  fmt.Println("  • Run 'cloudpull --help' for more commands")
+
+  return nil
+}

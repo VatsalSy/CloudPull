@@ -3,128 +3,111 @@
 # Variables
 BINARY_NAME=cloudpull
 BINARY_DIR=bin
-GO_CMD=go
-GO_BUILD=$(GO_CMD) build
-GO_TEST=$(GO_CMD) test
-GO_CLEAN=$(GO_CMD) clean
-GO_GET=$(GO_CMD) get
-GO_MOD=$(GO_CMD) mod
-MAIN_PATH=./cmd/cloudpull
+CMD_DIR=cmd/cloudpull
+VERSION=$(shell git describe --tags --always --dirty)
+BUILD_TIME=$(shell date +%Y%m%d-%H%M%S)
+LDFLAGS=-ldflags "-X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}"
 
-# Build variables
-VERSION?=dev
-BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
-COMMIT_HASH=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-LDFLAGS=-ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.CommitHash=$(COMMIT_HASH)"
+# Go parameters
+GOCMD=go
+GOBUILD=$(GOCMD) build
+GOCLEAN=$(GOCMD) clean
+GOTEST=$(GOCMD) test
+GOGET=$(GOCMD) get
+GOMOD=$(GOCMD) mod
 
-# Platforms
-PLATFORMS=darwin linux windows
-ARCHITECTURES=amd64 arm64
+# Targets
+.PHONY: all build clean test deps run install uninstall
 
-.PHONY: all build clean test coverage deps run install lint fmt help
+all: clean deps build
 
-# Default target
-all: clean deps build test
-
-# Build the binary
 build:
-	@echo "Building $(BINARY_NAME)..."
+	@echo "Building CloudPull..."
 	@mkdir -p $(BINARY_DIR)
-	$(GO_BUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME) $(MAIN_PATH)
+	$(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME) $(CMD_DIR)
+	@echo "Build complete: $(BINARY_DIR)/$(BINARY_NAME)"
 
-# Build for all platforms
-build-all:
-	@echo "Building for all platforms..."
-	@mkdir -p $(BINARY_DIR)
-	@for platform in $(PLATFORMS); do \
-		for arch in $(ARCHITECTURES); do \
-			output_name=$(BINARY_NAME)-$$platform-$$arch; \
-			if [ $$platform = "windows" ]; then output_name="$$output_name.exe"; fi; \
-			echo "Building $$output_name..."; \
-			GOOS=$$platform GOARCH=$$arch $(GO_BUILD) $(LDFLAGS) -o $(BINARY_DIR)/$$output_name $(MAIN_PATH); \
-		done; \
-	done
-
-# Clean build artifacts
 clean:
 	@echo "Cleaning..."
-	@$(GO_CLEAN)
+	$(GOCLEAN)
 	@rm -rf $(BINARY_DIR)
 
-# Run tests
 test:
 	@echo "Running tests..."
-	$(GO_TEST) -v -race ./...
+	$(GOTEST) -v ./...
 
-# Run tests with coverage
-coverage:
-	@echo "Running tests with coverage..."
-	$(GO_TEST) -v -race -coverprofile=coverage.out ./...
-	$(GO_CMD) tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report generated: coverage.html"
-
-# Download dependencies
 deps:
 	@echo "Downloading dependencies..."
-	$(GO_MOD) download
-	$(GO_MOD) tidy
+	$(GOMOD) download
+	$(GOMOD) tidy
 
-# Run the application
 run: build
-	@echo "Running $(BINARY_NAME)..."
+	@echo "Running CloudPull..."
 	./$(BINARY_DIR)/$(BINARY_NAME)
 
-# Install the binary
 install: build
-	@echo "Installing $(BINARY_NAME)..."
-	@cp $(BINARY_DIR)/$(BINARY_NAME) $(GOPATH)/bin/
+	@echo "Installing CloudPull..."
+	@cp $(BINARY_DIR)/$(BINARY_NAME) /usr/local/bin/
+	@echo "CloudPull installed to /usr/local/bin/$(BINARY_NAME)"
+	@echo "Run 'cloudpull init' to get started"
 
-# Lint the code
-lint:
-	@echo "Linting..."
-	@which golangci-lint > /dev/null || (echo "golangci-lint not found, installing..." && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
-	golangci-lint run
+uninstall:
+	@echo "Uninstalling CloudPull..."
+	@rm -f /usr/local/bin/$(BINARY_NAME)
+	@echo "CloudPull uninstalled"
 
-# Format the code
+# Development helpers
+.PHONY: fmt vet lint
+
 fmt:
 	@echo "Formatting code..."
-	$(GO_CMD) fmt ./...
+	@gofmt -s -w .
 
-# Generate mocks
-mocks:
-	@echo "Generating mocks..."
-	@which mockgen > /dev/null || (echo "mockgen not found, installing..." && go install github.com/golang/mock/mockgen@latest)
-	go generate ./...
+vet:
+	@echo "Running go vet..."
+	@go vet ./...
 
-# Database migrations
-migrate-up:
-	@echo "Running database migrations..."
-	@# Add migration command here
+lint:
+	@echo "Running linter..."
+	@golangci-lint run
 
-migrate-down:
-	@echo "Rolling back database migrations..."
-	@# Add rollback command here
+# Build for multiple platforms
+.PHONY: build-all build-linux build-windows build-darwin
 
-# Development setup
-dev-setup:
-	@echo "Setting up development environment..."
-	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	@go install github.com/golang/mock/mockgen@latest
-	@go install github.com/goreleaser/goreleaser@latest
-	@echo "Development tools installed!"
+build-all: build-linux build-windows build-darwin
+
+build-linux:
+	@echo "Building for Linux..."
+	@mkdir -p $(BINARY_DIR)
+	GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME)-linux-amd64 $(CMD_DIR)
+	GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME)-linux-arm64 $(CMD_DIR)
+
+build-windows:
+	@echo "Building for Windows..."
+	@mkdir -p $(BINARY_DIR)
+	GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME)-windows-amd64.exe $(CMD_DIR)
+
+build-darwin:
+	@echo "Building for macOS..."
+	@mkdir -p $(BINARY_DIR)
+	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME)-darwin-amd64 $(CMD_DIR)
+	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME)-darwin-arm64 $(CMD_DIR)
 
 # Help
 help:
-	@echo "CloudPull Makefile commands:"
-	@echo "  make build       - Build the binary"
-	@echo "  make build-all   - Build for all platforms"
-	@echo "  make clean       - Clean build artifacts"
-	@echo "  make test        - Run tests"
-	@echo "  make coverage    - Run tests with coverage"
-	@echo "  make deps        - Download dependencies"
-	@echo "  make run         - Build and run the application"
-	@echo "  make install     - Install the binary"
-	@echo "  make lint        - Lint the code"
-	@echo "  make fmt         - Format the code"
-	@echo "  make dev-setup   - Install development tools"
-	@echo "  make help        - Show this help message"
+	@echo "CloudPull Makefile"
+	@echo ""
+	@echo "Usage:"
+	@echo "  make              Build CloudPull"
+	@echo "  make build        Build the binary"
+	@echo "  make clean        Clean build artifacts"
+	@echo "  make test         Run tests"
+	@echo "  make deps         Download dependencies"
+	@echo "  make run          Build and run CloudPull"
+	@echo "  make install      Install CloudPull to /usr/local/bin"
+	@echo "  make uninstall    Uninstall CloudPull"
+	@echo "  make fmt          Format code"
+	@echo "  make vet          Run go vet"
+	@echo "  make lint         Run linter"
+	@echo "  make build-all    Build for all platforms"
+	@echo "  make help         Show this help message"

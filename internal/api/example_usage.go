@@ -1,0 +1,225 @@
+package api
+
+import (
+  "context"
+  "fmt"
+  "os"
+  "path/filepath"
+
+  "github.com/cloudpull/cloudpull/internal/logger"
+  "google.golang.org/api/googleapi"
+)
+
+/**
+ * Example usage of Google Drive API integration
+ * 
+ * This file demonstrates how to use the API modules together
+ * for common operations like authentication, downloading files,
+ * and batch operations.
+ * 
+ * Author: CloudPull Team
+ * Updated: 2025-01-29
+ */
+
+// ExampleUsage demonstrates common API operations
+func ExampleUsage() error {
+  // Initialize logger
+  log := logger.NewLogger("api-example")
+  
+  ctx := context.Background()
+  
+  // 1. Initialize authentication
+  credentialsPath := "path/to/credentials.json"
+  tokenPath := filepath.Join(os.Getenv("HOME"), ".cloudpull/token.json")
+  
+  authManager, err := NewAuthManager(credentialsPath, tokenPath, log)
+  if err != nil {
+    return fmt.Errorf("failed to create auth manager: %w", err)
+  }
+  
+  // 2. Get authenticated Drive service
+  service, err := authManager.GetDriveService(ctx)
+  if err != nil {
+    return fmt.Errorf("failed to get drive service: %w", err)
+  }
+  
+  // 3. Initialize rate limiter with custom config
+  rateLimiterConfig := &RateLimiterConfig{
+    RateLimit:       10,  // 10 requests per second
+    BurstSize:       20,  // Allow burst of 20 requests
+    BatchRateLimit:  5,   // 5 batch requests per second
+    ExportRateLimit: 3,   // 3 export requests per second
+  }
+  rateLimiter := NewAdaptiveRateLimiter(rateLimiterConfig)
+  
+  // 4. Create Drive client
+  driveClient := NewDriveClient(service, rateLimiter.RateLimiter, log)
+  
+  // Example 1: List files in root folder
+  fmt.Println("=== Listing files in root folder ===")
+  files, nextPageToken, err := driveClient.ListFiles(ctx, "root", "")
+  if err != nil {
+    return fmt.Errorf("failed to list files: %w", err)
+  }
+  
+  for _, file := range files {
+    fmt.Printf("File: %s (ID: %s, Size: %d bytes)\n", file.Name, file.ID, file.Size)
+  }
+  
+  // Handle pagination
+  for nextPageToken != "" {
+    moreFiles, token, err := driveClient.ListFiles(ctx, "root", nextPageToken)
+    if err != nil {
+      return fmt.Errorf("failed to list more files: %w", err)
+    }
+    files = append(files, moreFiles...)
+    nextPageToken = token
+  }
+  
+  // Example 2: Download a specific file
+  if len(files) > 0 {
+    fmt.Println("\n=== Downloading first file ===")
+    firstFile := files[0]
+    
+    if !firstFile.IsFolder {
+      destPath := filepath.Join("/tmp/downloads", firstFile.Name)
+      
+      err = driveClient.DownloadFile(ctx, firstFile.ID, destPath, func(downloaded, total int64) {
+        if total > 0 {
+          percent := float64(downloaded) / float64(total) * 100
+          fmt.Printf("\rDownloading: %.2f%% (%d/%d bytes)", percent, downloaded, total)
+        } else {
+          fmt.Printf("\rDownloading: %d bytes", downloaded)
+        }
+      })
+      fmt.Println() // New line after progress
+      
+      if err != nil {
+        log.Error("Failed to download file", "error", err)
+      } else {
+        fmt.Printf("Downloaded to: %s\n", destPath)
+      }
+    }
+  }
+  
+  // Example 3: Batch metadata fetching
+  fmt.Println("\n=== Fetching metadata for multiple files ===")
+  if len(files) >= 5 {
+    fileIDs := make([]string, 5)
+    for i := 0; i < 5; i++ {
+      fileIDs[i] = files[i].ID
+    }
+    
+    metadataFetcher := NewBatchMetadataFetcher(service, rateLimiter.RateLimiter, log)
+    metadata, err := metadataFetcher.FetchMetadata(ctx, fileIDs)
+    if err != nil {
+      log.Error("Failed to fetch metadata", "error", err)
+    } else {
+      for id, info := range metadata {
+        fmt.Printf("Metadata for %s: %+v\n", id, info)
+      }
+    }
+  }
+  
+  // Example 4: Batch downloads
+  fmt.Println("\n=== Batch downloading files ===")
+  downloadTasks := make([]DownloadTask, 0)
+  
+  for i, file := range files {
+    if !file.IsFolder && i < 5 { // Download up to 5 files
+      task := DownloadTask{
+        FileID:   file.ID,
+        DestPath: filepath.Join("/tmp/batch_downloads", file.Name),
+        FileInfo: file,
+      }
+      downloadTasks = append(downloadTasks, task)
+    }
+  }
+  
+  if len(downloadTasks) > 0 {
+    batchDownloader := NewBatchDownloader(driveClient, log, 3)
+    results, err := batchDownloader.DownloadFiles(ctx, downloadTasks, func(completed, total int) {
+      fmt.Printf("\rBatch progress: %d/%d files", completed, total)
+    })
+    fmt.Println() // New line after progress
+    
+    if err != nil {
+      log.Error("Batch download failed", "error", err)
+    } else {
+      for _, result := range results {
+        if result.Error != nil {
+          fmt.Printf("Failed to download %s: %v\n", result.Task.FileInfo.Name, result.Error)
+        } else {
+          fmt.Printf("Downloaded %s successfully\n", result.Task.FileInfo.Name)
+        }
+      }
+    }
+  }
+  
+  // Example 5: Export Google Docs/Sheets
+  fmt.Println("\n=== Exporting Google Workspace files ===")
+  for _, file := range files {
+    if file.CanExport {
+      fmt.Printf("Exporting %s as %s\n", file.Name, file.ExportFormat)
+      
+      destPath := filepath.Join("/tmp/exports", file.Name)
+      err = driveClient.ExportFile(ctx, file.ID, file.ExportFormat, destPath, func(downloaded, total int64) {
+        fmt.Printf("\rExporting: %d bytes", downloaded)
+      })
+      fmt.Println() // New line after progress
+      
+      if err != nil {
+        log.Error("Failed to export file", "file", file.Name, "error", err)
+      } else {
+        fmt.Printf("Exported to: %s\n", destPath)
+      }
+      
+      break // Export only one file for demo
+    }
+  }
+  
+  // Example 6: Rate limiter metrics
+  fmt.Println("\n=== Rate Limiter Metrics ===")
+  metrics := rateLimiter.GetMetrics()
+  fmt.Printf("Total requests: %d\n", metrics.TotalRequests)
+  fmt.Printf("Blocked requests: %d\n", metrics.BlockedRequests)
+  fmt.Printf("Requests per second: %.2f\n", metrics.RequestsPerSecond)
+  fmt.Printf("Block rate: %.2f%%\n", metrics.BlockRate)
+  fmt.Printf("Current rate limit: %d req/s\n", rateLimiter.GetCurrentRateLimit())
+  
+  return nil
+}
+
+// ExampleErrorHandling demonstrates error handling patterns
+func ExampleErrorHandling() {
+  log := logger.NewLogger("error-example")
+  ctx := context.Background()
+  
+  // Example of handling specific API errors
+  handleAPIError := func(err error) {
+    if apiErr, ok := err.(*googleapi.Error); ok {
+      switch apiErr.Code {
+      case 404:
+        log.Error("File not found", "error", err)
+      case 403:
+        for _, e := range apiErr.Errors {
+          if e.Reason == "userRateLimitExceeded" {
+            log.Warn("Rate limit exceeded, backing off")
+            // The adaptive rate limiter will handle this automatically
+          }
+        }
+      case 401:
+        log.Error("Authentication failed, token may be expired", "error", err)
+        // Re-authenticate
+      default:
+        log.Error("API error", "code", apiErr.Code, "error", err)
+      }
+    } else {
+      log.Error("Unknown error", "error", err)
+    }
+  }
+  
+  // Example usage
+  _ = handleAPIError
+  _ = ctx
+}
