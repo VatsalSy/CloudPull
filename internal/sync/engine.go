@@ -415,7 +415,6 @@ func (e *Engine) startSync(ctx context.Context) error {
 // runSync is the main sync loop.
 func (e *Engine) runSync() {
 	defer e.wg.Done()
-	defer close(e.doneChan)
 	defer e.cleanup()
 
 	// Check if resuming
@@ -671,6 +670,9 @@ func (e *Engine) cleanup() {
 
 	// Save final checkpoint
 	e.saveCheckpoint()
+	
+	// Close done channel to signal completion
+	close(e.doneChan)
 }
 
 // Helper methods
@@ -742,6 +744,21 @@ func (e *Engine) getStatus() string {
 	if e.isPaused {
 		return "paused"
 	}
+	
+	// Check if sync is complete
+	if e.walkingComplete {
+		stats := e.progressTracker.GetStats()
+		totalProcessed := stats.CompletedFiles + stats.FailedFiles + stats.SkippedFiles
+		if totalProcessed >= stats.TotalFiles && stats.TotalFiles > 0 {
+			if e.downloader != nil {
+				downloaderStats := e.downloader.GetStats()
+				if downloaderStats.ActiveDownloads == 0 && downloaderStats.WorkerPoolStats.QueuedTasks == 0 {
+					return "completed"
+				}
+			}
+		}
+	}
+	
 	return "running"
 }
 

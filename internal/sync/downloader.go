@@ -154,6 +154,11 @@ func NewDownloadManager(
 // Start starts the download manager.
 func (dm *DownloadManager) Start(ctx context.Context) error {
 	dm.ctx, dm.cancel = context.WithCancel(ctx)
+	
+	// Clean up old temporary files from previous runs
+	if err := dm.cleanupTempFiles(); err != nil {
+		dm.logger.Warn("Failed to cleanup temp files", "error", err)
+	}
 
 	// Start worker pool
 	if err := dm.workerPool.Start(dm.ctx); err != nil {
@@ -183,7 +188,9 @@ func (dm *DownloadManager) Stop() error {
 	}
 
 	// Clean up temp files
-	dm.cleanupTempFiles()
+	if err := dm.cleanupTempFiles(); err != nil {
+		dm.logger.Warn("Failed to cleanup temp files", "error", err)
+	}
 
 	return nil
 }
@@ -542,6 +549,7 @@ func (dm *DownloadManager) moveToFinal(tempPath, finalPath string) error {
 	return nil
 }
 
+
 // calculatePriorities calculates download priorities based on file size.
 func (dm *DownloadManager) calculatePriorities(files []*state.File) map[string]int {
 	priorities := make(map[string]int)
@@ -588,7 +596,8 @@ func (dm *DownloadManager) getExportExtension(mimeType string) string {
 }
 
 // cleanupTempFiles removes all temporary files.
-func (dm *DownloadManager) cleanupTempFiles() {
+func (dm *DownloadManager) cleanupTempFiles() error {
+	// First, clean up any active downloads
 	dm.activeDownloads.Range(func(key, value interface{}) bool {
 		if info, ok := value.(*DownloadInfo); ok {
 			if _, err := os.Stat(info.TempPath); err == nil {
@@ -598,6 +607,39 @@ func (dm *DownloadManager) cleanupTempFiles() {
 		}
 		return true
 	})
+	
+	// Then, clean up all files in temp directory from previous runs
+	if dm.tempDir != "" {
+		// Create temp directory if it doesn't exist
+		if err := os.MkdirAll(dm.tempDir, 0755); err != nil {
+			return errors.Wrap(err, "failed to create temp directory")
+		}
+		
+		// Read all files in temp directory
+		entries, err := os.ReadDir(dm.tempDir)
+		if err != nil {
+			return errors.Wrap(err, "failed to read temp directory")
+		}
+		
+		// Remove all files (they're all temporary from previous runs)
+		removedCount := 0
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				filePath := filepath.Join(dm.tempDir, entry.Name())
+				if err := os.Remove(filePath); err != nil {
+					dm.logger.Warn("Failed to remove temp file", "file", filePath, "error", err)
+				} else {
+					removedCount++
+				}
+			}
+		}
+		
+		if removedCount > 0 {
+			dm.logger.Info("Cleaned up old temporary files", "count", removedCount, "directory", dm.tempDir)
+		}
+	}
+	
+	return nil
 }
 
 // GetStats returns download manager statistics.

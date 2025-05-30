@@ -184,16 +184,21 @@ func runSync(cmd *cobra.Command, args []string) error {
 	}
 
 	// Wait for completion or interruption
-	select {
-	case <-completionChan:
-		fmt.Println("DEBUG: Received completion signal")
-		// Wait for progress monitoring to finish
-		if !noProgress && !dryRun {
-			fmt.Println("DEBUG: Waiting for progress monitoring to finish")
-			<-progressDone
-			fmt.Println("DEBUG: Progress monitoring finished")
-		}
-		fmt.Println(color.GreenString("\n✅ Sync completed successfully!"))
+	completionReceived := false
+	for !completionReceived {
+		select {
+		case <-completionChan:
+			completionReceived = true
+		case <-progressDone:
+			// If progress monitoring detected completion, we're done
+			completionReceived = true
+		case <-time.After(100 * time.Millisecond):
+			// Check status periodically as a fallback
+			if progress := application.GetProgress(); progress != nil {
+				if progress.Status == "stopped" || progress.Status == "completed" {
+					completionReceived = true
+				}
+			}
 	case sig := <-sigChan:
 		fmt.Printf("\n%s Received signal: %v\n", color.YellowString("⚠️"), sig)
 		fmt.Println("Cleaning up sync session...")
@@ -228,10 +233,14 @@ func runSync(cmd *cobra.Command, args []string) error {
 			}
 		}
 		
-		return fmt.Errorf("sync interrupted by user")
-	}
+			return fmt.Errorf("sync interrupted by user")
+			}
+		}
+		
+		// Sync completed successfully
+		fmt.Println(color.GreenString("\n✅ Sync completed successfully!"))
 
-	return nil
+		return nil
 }
 
 func extractFolderID(input string) string {
@@ -266,16 +275,21 @@ func monitorSyncProgress(app *app.App, completionChan <-chan struct{}) {
 
 	var bar *progressbar.ProgressBar
 	lastFiles := int64(0)
+	
+	// Create a copy of the completion channel to avoid consuming it
+	done := make(chan struct{})
+	go func() {
+		<-completionChan
+		close(done)
+	}()
 
 	for {
 		select {
-		case <-completionChan:
+		case <-done:
 			// Sync completed
-			fmt.Println("DEBUG: Progress monitor received completion signal")
 			if bar != nil {
 				bar.Finish()
 			}
-			fmt.Println("DEBUG: Progress monitor exiting")
 			return
 		case <-ticker.C:
 			progress := app.GetProgress()
@@ -308,7 +322,7 @@ func monitorSyncProgress(app *app.App, completionChan <-chan struct{}) {
 			}
 
 			// Check if complete via status
-			if progress.Status == "stopped" {
+			if progress.Status == "stopped" || progress.Status == "completed" {
 				if bar != nil {
 					bar.Finish()
 				}
