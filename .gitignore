@@ -1,9 +1,5 @@
 # CloudPull .gitignore
-
-# Local planning and configuration
-.claude/
-CLAUDE.md
-.claude.md
+**/cloudpull-downloads/
 
 # Binaries for programs and plugins
 *.exe

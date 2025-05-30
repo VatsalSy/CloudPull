@@ -296,6 +296,4 @@ CloudPull is released under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## Support
 
-- 📖 [Documentation](https://github.com/VatsalSy/CloudPull/wiki)
 - 🐛 [Issue Tracker](https://github.com/VatsalSy/CloudPull/issues)
-- 💬 [Discussions](https://github.com/VatsalSy/CloudPull/discussions)
