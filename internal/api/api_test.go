@@ -7,12 +7,12 @@ import (
   "testing"
   "time"
 
-  "github.com/VatsalSy/CloudPull/internal/logger"
   "github.com/stretchr/testify/assert"
   "github.com/stretchr/testify/require"
   "golang.org/x/oauth2"
   "google.golang.org/api/drive/v3"
   "google.golang.org/api/googleapi"
+  "github.com/VatsalSy/CloudPull/internal/logger"
 )
 
 /**
@@ -23,13 +23,18 @@ import (
  */
 
 // Mock logger for testing
-type mockLogger struct{}
+type mockLogger struct {
+	*logger.Logger
+}
 
-func (m mockLogger) Debug(msg string, keysAndValues ...interface{}) {}
-func (m mockLogger) Info(msg string, keysAndValues ...interface{})  {}
-func (m mockLogger) Warn(msg string, keysAndValues ...interface{})  {}
-func (m mockLogger) Error(msg string, keysAndValues ...interface{}) {}
-func (m mockLogger) Fatal(msg string, keysAndValues ...interface{}) {}
+func newMockLogger() *logger.Logger {
+	cfg := &logger.Config{
+		Level:  "error",
+		Format: "json",
+	}
+	l, _ := logger.New(cfg)
+	return l
+}
 
 func TestRateLimiter(t *testing.T) {
   t.Run("basic rate limiting", func(t *testing.T) {
@@ -146,7 +151,7 @@ func TestAuthManager(t *testing.T) {
   }
 
   t.Run("token management", func(t *testing.T) {
-    logger := mockLogger{}
+    logger := newMockLogger()
     tokenPath := "/tmp/cloudpull_test_token.json"
     defer os.Remove(tokenPath)
     
@@ -175,7 +180,7 @@ func TestAuthManager(t *testing.T) {
 
 func TestBatchProcessor(t *testing.T) {
   t.Run("batch queue management", func(t *testing.T) {
-    logger := mockLogger{}
+    logger := newMockLogger()
     rl := NewRateLimiter(nil)
     
     bp := NewBatchProcessor(nil, rl, logger)

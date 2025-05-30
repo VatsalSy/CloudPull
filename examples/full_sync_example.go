@@ -22,6 +22,7 @@ import (
   "time"
 
   "github.com/VatsalSy/CloudPull/internal/app"
+  cloudsync "github.com/VatsalSy/CloudPull/internal/sync"
   "github.com/fatih/color"
 )
 
@@ -147,7 +148,7 @@ func monitorProgress(ctx context.Context, app *app.App, done chan struct{}) {
   ticker := time.NewTicker(500 * time.Millisecond)
   defer ticker.Stop()
 
-  var lastProgress *app.SyncProgress
+  var lastProgress *cloudsync.SyncProgress
   startTime := time.Now()
 
   for {
@@ -177,7 +178,7 @@ func monitorProgress(ctx context.Context, app *app.App, done chan struct{}) {
   }
 }
 
-func displayProgress(p *app.SyncProgress, startTime time.Time) {
+func displayProgress(p *cloudsync.SyncProgress, startTime time.Time) {
   // Clear line and move cursor to beginning
   fmt.Print("\r\033[K")
   

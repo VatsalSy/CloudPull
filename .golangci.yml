@@ -8,35 +8,19 @@ run:
   # Include test files
   tests: true
   
-  # Skip directories
-  skip-dirs:
-    - vendor
-    - third_party
-    - testdata
-    - examples
-    - build
-  
-  # Skip files
-  skip-files:
-    - ".*\\.pb\\.go$"
-    - ".*\\.gen\\.go$"
-  
-  # Go version
-  go: "1.21"
+  # Skip directories and files using issues configuration instead
 
 # Output configuration
 output:
   # Format of output
-  format: colored-line-number
+  formats:
+    - format: colored-line-number
   
   # Print lines of code with issue
   print-issued-lines: true
   
   # Print linter name in the end of issue text
   print-linter-name: true
-  
-  # Make issues output unique by line
-  uniq-by-line: true
 
 # Linter settings
 linters-settings:
@@ -56,8 +40,8 @@ linters-settings:
 
   # Go vet
   govet:
-    # Report about shadowed variables
-    check-shadowing: true
+    # Enable all analyzers
+    enable-all: true
     
     # Settings per analyzer
     settings:
@@ -77,9 +61,6 @@ linters-settings:
   stylecheck:
     # STxxxx checks
     checks: ["all", "-ST1000", "-ST1003", "-ST1016", "-ST1020", "-ST1021", "-ST1022"]
-    
-    # Check exported comments
-    exported-fields-are-used: true
 
   # Unused variables
   unused:
@@ -226,7 +207,7 @@ linters:
     - durationcheck # Duration multiplications
     - errorlint     # Error wrapping
     - exhaustive    # Exhaustive enum switches
-    - exportloopref # Loop variable export
+    - copyloopvar   # Loop variable export (replaces exportloopref)
     - funlen        # Function length
     - gocognit      # Cognitive complexity
     - goconst       # Repeated strings
@@ -236,7 +217,7 @@ linters:
     - godox         # TODO/FIXME comments
     - gofmt         # Go fmt
     - goimports     # Import organization
-    - gomnd         # Magic numbers
+    - mnd           # Magic numbers (replaces gomnd)
     - goprintffuncname # Printf func names
     - gosec         # Security
     - lll           # Line length
@@ -266,19 +247,18 @@ linters:
     - forbidigo     # Forbidden identifiers
     - gochecknoglobals # No globals
     - gochecknoinits   # No init functions
-    - goerr113      # Error variables
+    - err113        # Error variables (replaces goerr113)
     - goheader      # File headers
-    - golint        # Deprecated
     - gomodguard    # Module guard
-    - interfacer    # Deprecated
-    - maligned      # Deprecated
     - nlreturn      # New line returns
-    - scopelint     # Deprecated
     - testpackage   # Separate test packages
     - wsl           # Whitespace linter
 
 # Issues configuration
 issues:
+  # Make issues output unique by line
+  uniq-by-line: true
+  
   # Exclude certain issues
   exclude-rules:
     # Exclude test files from certain linters
@@ -288,7 +268,7 @@ issues:
         - funlen
         - gocognit
         - goconst
-        - gomnd
+        - mnd
         - lll
 
     # Exclude example files
@@ -313,11 +293,18 @@ issues:
   # Maximum same issues
   max-same-issues: 10
 
-  # Exclude dirs from issues
+  # Exclude certain paths
   exclude-dirs:
     - vendor
     - third_party
     - testdata
+    - examples
+    - build
+  
+  # Exclude generated files
+  exclude-files:
+    - ".*\\.pb\\.go$"
+    - ".*\\.gen\\.go$"
 
   # Fix found issues
   fix: false

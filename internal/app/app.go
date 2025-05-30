@@ -593,3 +593,51 @@ func formatBytes(bytes int64) string {
 
   return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
+
+// GetAllSessions returns all sync sessions
+func (app *App) GetAllSessions() ([]*state.Session, error) {
+  if app.stateManager == nil {
+    return nil, errors.New("state manager not initialized")
+  }
+  
+  ctx := context.Background()
+  return app.stateManager.GetAllSessions(ctx)
+}
+
+// IsSessionRunning checks if a session is currently running
+func (app *App) IsSessionRunning(sessionID string) bool {
+  app.mu.RLock()
+  defer app.mu.RUnlock()
+  
+  if !app.isRunning || app.syncEngine == nil {
+    return false
+  }
+  
+  // Check if this is the current session
+  status := app.syncEngine.GetStatus()
+  return status != nil && status.SessionID == sessionID && status.IsRunning
+}
+
+// CleanupSession removes a stuck or inactive session
+func (app *App) CleanupSession(sessionID string) error {
+  if app.stateManager == nil {
+    return errors.New("state manager not initialized")
+  }
+  
+  ctx := context.Background()
+  
+  // First update the session status to cancelled if it's still active
+  session, err := app.stateManager.GetSession(ctx, sessionID)
+  if err != nil {
+    return errors.Wrap(err, "failed to get session")
+  }
+  
+  if session.Status == state.SessionStatusActive {
+    if err := app.stateManager.UpdateSessionStatus(ctx, sessionID, state.SessionStatusCancelled); err != nil {
+      return errors.Wrap(err, "failed to update session status")
+    }
+  }
+  
+  // TODO: Add method to delete or archive session if needed
+  return nil
+}

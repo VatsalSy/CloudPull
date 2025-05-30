@@ -555,13 +555,24 @@ func (fw *FolderWalker) createFileRecord(
   sessionID string,
   folderPath string,
 ) *state.File {
+  fullPath := filepath.Join(folderPath, fileInfo.Name)
+  
+  fw.logger.Debug("Creating file record",
+    "file_id", fileInfo.ID,
+    "file_name", fileInfo.Name,
+    "folder_path", folderPath,
+    "full_path", fullPath,
+    "size", fileInfo.Size,
+    "mime_type", fileInfo.MimeType,
+  )
+  
   file := &state.File{
     ID:               generateID(),
     DriveID:          fileInfo.ID,
     FolderID:         folder.ID,
     SessionID:        sessionID,
     Name:             fileInfo.Name,
-    Path:             filepath.Join(folderPath, fileInfo.Name),
+    Path:             fullPath,
     Size:             fileInfo.Size,
     Status:           state.FileStatusPending,
     BytesDownloaded:  0,

@@ -43,6 +43,7 @@ type WorkerPool struct {
   progressTracker *ProgressTracker
   errorHandler    *errors.Handler
   logger          *logger.Logger
+  downloadManager *DownloadManager // Reference to parent download manager
   
   // Worker management
   workers         []*Worker
@@ -147,6 +148,13 @@ func NewWorkerPool(
   }
 }
 
+// SetDownloadManager sets the download manager reference
+func (wp *WorkerPool) SetDownloadManager(dm *DownloadManager) {
+  wp.mu.Lock()
+  defer wp.mu.Unlock()
+  wp.downloadManager = dm
+}
+
 // Start starts the worker pool
 func (wp *WorkerPool) Start(ctx context.Context) error {
   wp.mu.Lock()
@@ -225,6 +233,13 @@ func (wp *WorkerPool) SubmitTask(file *state.File, priority int) error {
   // Add to priority queue
   wp.taskQueue.Push(task)
   
+  wp.logger.Debug("Task submitted to queue",
+    "file_id", file.ID,
+    "file_name", file.Name,
+    "priority", priority,
+    "queue_size", wp.taskQueue.Len(),
+  )
+  
   return nil
 }
 
@@ -264,21 +279,34 @@ func (wp *WorkerPool) dispatchTasks() {
       return
       
     case <-ticker.C:
-      // Check if there are tasks in the queue
-      task := wp.taskQueue.Pop()
-      if task == nil {
-        continue
+      // Process all available tasks in the queue
+      for {
+        // Check if there are tasks in the queue
+        task := wp.taskQueue.Pop()
+        if task == nil {
+          break
+        }
+        
+        // Send task to workers
+        select {
+        case wp.taskChan <- task:
+          // Task dispatched
+          wp.logger.Debug("Task dispatched to worker",
+            "file_id", task.File.ID,
+            "file_name", task.File.Name,
+            "priority", task.Priority,
+          )
+        case <-wp.ctx.Done():
+          // Put task back in queue
+          wp.taskQueue.Push(task)
+          return
+        default:
+          // Channel is full, put task back and wait
+          wp.taskQueue.Push(task)
+          goto waitForNextTick
+        }
       }
-      
-      // Send task to workers
-      select {
-      case wp.taskChan <- task:
-        // Task dispatched
-      case <-wp.ctx.Done():
-        // Put task back in queue
-        wp.taskQueue.Push(task)
-        return
-      }
+      waitForNextTick:
     }
   }
 }
@@ -386,10 +414,11 @@ func (w *Worker) processTask(task *DownloadTask) {
   startTime := time.Now()
   task.StartedAt = &startTime
   
-  w.pool.logger.Debug("Worker processing task",
+  w.pool.logger.Info("Worker processing task",
     "worker_id", w.id,
     "file_id", task.File.ID,
     "file_name", task.File.Name,
+    "file_size", task.File.Size,
     "priority", task.Priority,
   )
   
@@ -419,6 +448,23 @@ func (w *Worker) processTask(task *DownloadTask) {
   task.CompletedAt = &completedTime
   duration := completedTime.Sub(startTime)
   
+  if err != nil {
+    w.pool.logger.Error(err, "Download failed",
+      "worker_id", w.id,
+      "file_id", task.File.ID,
+      "file_name", task.File.Name,
+      "duration", duration,
+    )
+  } else {
+    w.pool.logger.Info("Download completed",
+      "worker_id", w.id,
+      "file_id", task.File.ID,
+      "file_name", task.File.Name,
+      "bytes_written", bytesWritten,
+      "duration", duration,
+    )
+  }
+  
   // Send result
   result := &TaskResult{
     Task:         task,
@@ -444,6 +490,17 @@ func (w *Worker) processTask(task *DownloadTask) {
 
 // downloadFile performs the actual file download
 func (w *Worker) downloadFile(task *DownloadTask, bytesWritten *int64) error {
+  // Use download manager if available (for advanced features like resume, checksum, etc)
+  if w.pool.downloadManager != nil {
+    err := w.pool.downloadManager.DownloadFile(w.pool.ctx, task.File)
+    if err != nil {
+      return errors.Wrap(err, "download failed")
+    }
+    *bytesWritten = task.File.Size
+    return nil
+  }
+  
+  // Fallback to direct client download
   // Progress callback
   progressFn := func(downloaded, total int64) {
     *bytesWritten = downloaded

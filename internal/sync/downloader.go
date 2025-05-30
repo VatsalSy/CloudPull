@@ -154,6 +154,9 @@ func NewDownloadManager(
     downloadStats:   &DownloadStats{},
   }
   
+  // Set the download manager reference in the worker pool
+  workerPool.SetDownloadManager(dm)
+  
   return dm, nil
 }
 
@@ -225,6 +228,15 @@ func (dm *DownloadManager) ScheduleBatch(files []*state.File) error {
 
 // DownloadFile downloads a single file with resume support
 func (dm *DownloadManager) DownloadFile(ctx context.Context, file *state.File) error {
+  // Get session to get destination path
+  session, err := dm.stateManager.GetSession(ctx, file.SessionID)
+  if err != nil {
+    return errors.Wrap(err, "failed to get session")
+  }
+  if session == nil {
+    return errors.Errorf("session not found: %s", file.SessionID)
+  }
+  
   // Create download info
   downloadInfo := &DownloadInfo{
     FileID:       file.ID,
@@ -238,9 +250,18 @@ func (dm *DownloadManager) DownloadFile(ctx context.Context, file *state.File) e
     downloadInfo.ExportFormat = file.ExportMimeType.String
   }
   
-  // Generate paths
+  // Generate paths - combine destination path with file path
   downloadInfo.TempPath = dm.getTempPath(file)
-  downloadInfo.FinalPath = file.Path
+  downloadInfo.FinalPath = filepath.Join(session.DestinationPath, file.Path)
+  
+  dm.logger.Info("Starting file download",
+    "file_id", file.ID,
+    "file_name", file.Name,
+    "file_size", file.Size,
+    "temp_path", downloadInfo.TempPath,
+    "final_path", downloadInfo.FinalPath,
+    "is_google_doc", file.IsGoogleDoc,
+  )
   
   // Store in active downloads
   dm.activeDownloads.Store(file.ID, downloadInfo)
@@ -259,7 +280,6 @@ func (dm *DownloadManager) DownloadFile(ctx context.Context, file *state.File) e
   }()
   
   // Perform download
-  var err error
   if file.IsGoogleDoc {
     err = dm.downloadGoogleDoc(ctx, file, downloadInfo)
   } else {

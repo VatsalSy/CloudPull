@@ -52,6 +52,7 @@ func init() {
   rootCmd.AddCommand(resumeCmd)
   rootCmd.AddCommand(statusCmd)
   rootCmd.AddCommand(configCmd)
+  rootCmd.AddCommand(cleanupCmd)
 
   // Enable shell completion
   rootCmd.CompletionOptions.DisableDefaultCmd = false

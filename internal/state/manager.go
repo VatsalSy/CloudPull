@@ -405,6 +405,21 @@ func (m *Manager) UpdateSessionStatus(ctx context.Context, sessionID string, sta
   return m.sessions.UpdateStatus(ctx, sessionID, status)
 }
 
+// GetAllSessions returns all sessions
+func (m *Manager) GetAllSessions(ctx context.Context) ([]*Session, error) {
+  query := `
+    SELECT * FROM sessions 
+    ORDER BY created_at DESC`
+  
+  var sessions []*Session
+  err := m.db.SelectContext(ctx, &sessions, query)
+  if err != nil {
+    return nil, fmt.Errorf("failed to get sessions: %w", err)
+  }
+  
+  return sessions, nil
+}
+
 // UpdateSessionTotals updates the session total counts
 func (m *Manager) UpdateSessionTotals(ctx context.Context, sessionID string, totalFiles, totalBytes int64) error {
   query := `

@@ -491,6 +491,12 @@ func (e *Engine) startFolderWalk() error {
       
       // Process files
       if len(result.Files) > 0 {
+        e.logger.Debug("Processing walk result",
+          "folder", result.Folder.Name,
+          "files_count", len(result.Files),
+          "total_files_so_far", totalFiles,
+        )
+        
         totalFiles += int64(len(result.Files))
         for _, file := range result.Files {
           totalBytes += file.Size
@@ -498,14 +504,18 @@ func (e *Engine) startFolderWalk() error {
           
           // Schedule batch when full
           if len(fileBatch) >= batchSize {
+            e.logger.Debug("Scheduling file batch",
+              "batch_size", len(fileBatch),
+              "total_scheduled", totalFiles,
+            )
             e.downloader.ScheduleBatch(fileBatch)
             fileBatch = make([]*state.File, 0, batchSize)
           }
         }
       }
       
-      // Update totals periodically
-      if totalFiles%1000 == 0 {
+      // Update totals immediately when we have files
+      if totalFiles > 0 && (totalFiles <= 100 || totalFiles%1000 == 0) {
         e.progressTracker.SetTotals(totalFiles, totalBytes)
         e.updateSessionTotals(totalFiles, totalBytes)
       }

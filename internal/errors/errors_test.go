@@ -17,7 +17,6 @@ import (
   "time"
   
   "github.com/stretchr/testify/assert"
-  "github.com/stretchr/testify/require"
 )
 
 // Mock logger for testing

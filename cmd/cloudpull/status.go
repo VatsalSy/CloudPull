@@ -490,10 +490,15 @@ func convertToActiveSession(session *state.Session) ActiveSession {
     speed = int64(float64(session.CompletedBytes) / elapsed.Seconds())
   }
   
+  source := "Unknown"
+  if session.RootFolderName.Valid {
+    source = session.RootFolderName.String
+  }
+  
   return ActiveSession{
     ID:              session.ID,
     StartTime:       session.StartTime,
-    Source:          session.RootFolderName,
+    Source:          source,
     Destination:     session.DestinationPath,
     TotalFiles:      int(session.TotalFiles),
     CompletedFiles:  int(session.CompletedFiles),
