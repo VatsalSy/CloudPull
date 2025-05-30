@@ -208,6 +208,39 @@ CloudPull is built with a modular architecture:
 - **Progress Tracker**: Real-time progress monitoring
 - **Error Handler**: Intelligent retry and recovery
 
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         CLI Layer                             │
+│  (cmd/cloudpull/*)                                           │
+│  - User commands (init, auth, sync, resume)                  │
+│  - Progress display                                           │
+│  - Configuration management                                   │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+┌─────────────────────▼───────────────────────────────────────┐
+│                    App Coordinator                           │
+│  (internal/app/app.go)                                       │
+│  - Dependency injection                                      │
+│  - Component lifecycle management                            │
+│  - Signal handling                                           │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+┌─────────────────────▼───────────────────────────────────────┐
+│                   Core Components                            │
+├─────────────────────────────────────────────────────────────┤
+│  Sync Engine          │  API Client      │  State Manager   │
+│  - Orchestration      │  - Google Drive  │  - Database      │
+│  - Progress tracking  │  - Rate limiting │  - Session mgmt  │
+│  - Worker pools       │  - Auth flow     │  - File tracking │
+├─────────────────────────────────────────────────────────────┤
+│         Error Handler        │         Logger               │
+│  - Retry logic              │  - Structured logging        │
+│  - Error categorization     │  - Multiple outputs          │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ### Key Design Decisions
 
 1. **Resumable Downloads**: Each file's download progress is tracked in SQLite, allowing byte-level resume capability
@@ -216,6 +249,36 @@ CloudPull is built with a modular architecture:
 4. **BFS Folder Traversal**: Breadth-first search ensures shallow files are prioritized over deeply nested ones
 5. **Checksum Verification**: MD5 checksums are verified post-download to ensure data integrity
 6. **Graceful Shutdown**: Context-based cancellation ensures clean shutdown and state persistence
+
+### Component Communication Flow
+
+1. **Initialization**: `App.Initialize()` → Logger → Error Handler → Database → Auth Manager → Sync Engine
+2. **Authentication**: CLI → App → AuthManager → Google OAuth2 → Token Storage → API Client
+3. **Sync Operation**: CLI Command → App.StartSync() → SyncEngine → Folder Walker → Download Manager → State Manager
+4. **Progress Updates**: SyncEngine → ProgressTracker → App.GetProgress() → CLI Display
+5. **Error Handling**: API Error → Error Handler → Retry Logic → State Manager → Progress Updates
+
+### Session Management
+
+Sessions provide resumable sync operations:
+
+1. **Create Session**: New sync creates session in database
+2. **Track Progress**: File completions update session state
+3. **Checkpoint**: Periodic saves ensure progress isn't lost
+4. **Resume**: Load session and continue from last checkpoint
+
+### Extending CloudPull
+
+To add new features:
+
+1. **Add to appropriate component** (e.g., new download strategy in sync engine)
+2. **Update interfaces** if needed
+3. **Wire through app coordinator**
+4. **Add CLI command/flag**
+5. **Update configuration**
+6. **Add tests**
+
+The modular architecture makes it easy to extend CloudPull without affecting existing functionality.
 
 ## Development
 
@@ -255,8 +318,10 @@ cloudpull/
 ├── pkg/              # Public packages
 │   └── progress/     # Progress tracking
 ├── tests/            # Test suites
+├── scripts/          # Build and setup scripts
 ├── .claude/          # Development history and AI context
-└── docs/             # Additional documentation
+├── Makefile          # Build automation
+└── go.mod            # Go module definition
 ```
 
 ### Development History
