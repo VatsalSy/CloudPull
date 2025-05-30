@@ -42,7 +42,7 @@ type WorkerPool struct {
   stateManager    *state.Manager
   progressTracker *ProgressTracker
   errorHandler    *errors.Handler
-  logger          logger.Logger
+  logger          *logger.Logger
   
   // Worker management
   workers         []*Worker
@@ -96,7 +96,7 @@ type TaskResult struct {
 // PriorityQueue implements a priority queue for download tasks
 type PriorityQueue struct {
   mu    sync.Mutex
-  items []*DownloadTask
+  items taskHeap
 }
 
 // WorkerPoolConfig contains configuration for the worker pool
@@ -121,7 +121,7 @@ func NewWorkerPool(
   stateManager *state.Manager,
   progressTracker *ProgressTracker,
   errorHandler *errors.Handler,
-  logger logger.Logger,
+  logger *logger.Logger,
   config *WorkerPoolConfig,
 ) *WorkerPool {
   if config == nil {
@@ -469,9 +469,11 @@ func (w *Worker) downloadFile(task *DownloadTask, bytesWritten *int64) error {
 
 // NewPriorityQueue creates a new priority queue
 func NewPriorityQueue() *PriorityQueue {
-  return &PriorityQueue{
-    items: make([]*DownloadTask, 0),
+  pq := &PriorityQueue{
+    items: make(taskHeap, 0),
   }
+  heap.Init(&pq.items)
+  return pq
 }
 
 // Push adds a task to the queue

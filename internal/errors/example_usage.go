@@ -119,13 +119,14 @@ func ExampleAPICallWithQuotaHandling(ctx context.Context) error {
   log := logger.Global()
   
   // Configure specific retry policy for API quota errors
-  quotaPolicy := &RetryPolicy{
-    MaxAttempts:  10,
-    InitialDelay: 10 * time.Second,
-    MaxDelay:     5 * time.Minute,
-    Multiplier:   1.5,
-    Jitter:       true,
-  }
+  // TODO: Implement quota-specific retry policy
+  // quotaPolicy := &RetryPolicy{
+  //   MaxAttempts:  10,
+  //   InitialDelay: 10 * time.Second,
+  //   MaxDelay:     5 * time.Minute,
+  //   Multiplier:   1.5,
+  //   Jitter:       true,
+  // }
   
   // Use adaptive backoff for API calls
   adaptiveBackoff := NewAdaptiveBackoff(

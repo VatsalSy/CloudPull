@@ -12,7 +12,6 @@ package errors
 
 import (
   "context"
-  "fmt"
   "time"
 )
 

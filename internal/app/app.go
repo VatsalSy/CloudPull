@@ -17,6 +17,7 @@ package app
 import (
   "context"
   "fmt"
+  "io"
   "os"
   "os/signal"
   "path/filepath"
@@ -30,7 +31,7 @@ import (
   "github.com/VatsalSy/CloudPull/internal/errors"
   "github.com/VatsalSy/CloudPull/internal/logger"
   "github.com/VatsalSy/CloudPull/internal/state"
-  "github.com/VatsalSy/CloudPull/internal/sync"
+  cloudsync "github.com/VatsalSy/CloudPull/internal/sync"
   "github.com/spf13/viper"
 )
 
@@ -42,11 +43,11 @@ type App struct {
   config *config.Config
 
   // Core components
-  logger       logger.Logger
+  logger       *logger.Logger
   authManager  *api.AuthManager
   apiClient    *api.DriveClient
   stateManager *state.Manager
-  syncEngine   *sync.Engine
+  syncEngine   *cloudsync.Engine
   errorHandler *errors.Handler
 
   // State
@@ -82,18 +83,27 @@ func (app *App) Initialize() error {
   app.config = cfg
 
   // Initialize logger
+  // Create output writer based on config
+  var output io.Writer = os.Stdout
+  outputPath := cfg.GetString("log.output")
+  if outputPath != "" && outputPath != "stdout" {
+    file, err := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+    if err != nil {
+      return errors.Wrap(err, "failed to open log file")
+    }
+    output = file
+  }
+  
   logConfig := &logger.Config{
-    Level:      cfg.GetLogLevel(),
-    Format:     cfg.GetString("log.format"),
-    Output:     cfg.GetString("log.output"),
-    MaxSize:    cfg.GetInt("log.max_size"),
-    MaxBackups: cfg.GetInt("log.max_backups"),
-    MaxAge:     cfg.GetInt("log.max_age"),
+    Level:         cfg.GetLogLevel(),
+    Output:        output,
+    Pretty:        cfg.GetString("log.format") == "pretty",
+    IncludeCaller: true,
   }
 
-  app.logger, err = logger.New(logConfig)
-  if err != nil {
-    return errors.Wrap(err, "failed to initialize logger")
+  app.logger = logger.New(logConfig)
+  if app.logger == nil {
+    return errors.NewSimple("failed to initialize logger")
   }
 
   app.logger.Info("Initializing CloudPull",
@@ -102,14 +112,7 @@ func (app *App) Initialize() error {
   )
 
   // Initialize error handler
-  errorConfig := &errors.Config{
-    MaxRetries:     cfg.GetInt("errors.max_retries"),
-    RetryDelay:     cfg.GetDuration("errors.retry_delay"),
-    RetryMultiplier: cfg.GetFloat64("errors.retry_multiplier"),
-    RetryMaxDelay:  cfg.GetDuration("errors.retry_max_delay"),
-  }
-
-  app.errorHandler = errors.NewHandler(errorConfig, app.logger)
+  app.errorHandler = errors.NewHandler(app.logger)
 
   // Initialize database
   dbPath := filepath.Join(cfg.GetDataDir(), "cloudpull.db")
@@ -118,7 +121,9 @@ func (app *App) Initialize() error {
   }
 
   // Initialize state manager
-  app.stateManager, err = state.NewManager(dbPath, app.logger)
+  dbConfig := state.DefaultConfig()
+  dbConfig.Path = dbPath
+  app.stateManager, err = state.NewManager(dbConfig)
   if err != nil {
     return errors.Wrap(err, "failed to initialize state manager")
   }
@@ -167,19 +172,23 @@ func (app *App) InitializeAuth() error {
 
   app.authManager = authManager
 
-  // Initialize API client
-  apiConfig := &api.Config{
-    MaxRetries:      app.config.GetInt("api.max_retries"),
-    RetryDelay:      app.config.GetDuration("api.retry_delay"),
-    RequestTimeout:  app.config.GetDuration("api.request_timeout"),
-    MaxConcurrent:   app.config.GetInt("api.max_concurrent"),
-    RateLimitPerSec: app.config.GetInt("api.rate_limit"),
+  // Get Drive service
+  driveService, err := authManager.GetDriveService(context.Background())
+  if err != nil {
+    return errors.Wrap(err, "failed to get drive service")
   }
 
-  app.apiClient, err = api.NewDriveClient(authManager, apiConfig, app.logger)
-  if err != nil {
-    return errors.Wrap(err, "failed to initialize API client")
+  // Initialize rate limiter
+  rateLimiterConfig := &api.RateLimiterConfig{
+    RateLimit:      app.config.GetInt("api.rate_limit"),
+    BurstSize:      app.config.GetInt("api.rate_limit") * 2,
+    BatchRateLimit: app.config.GetInt("api.rate_limit") / 2,
+    ExportRateLimit: app.config.GetInt("api.rate_limit") / 4,
   }
+  rateLimiter := api.NewRateLimiter(rateLimiterConfig)
+
+  // Initialize API client
+  app.apiClient = api.NewDriveClient(driveService, rateLimiter, app.logger)
 
   app.logger.Info("Authentication initialized successfully")
   return nil
@@ -203,21 +212,21 @@ func (app *App) InitializeSyncEngine() error {
   }
 
   // Create sync engine configuration
-  engineConfig := &sync.EngineConfig{
-    WalkerConfig: &sync.WalkerConfig{
+  engineConfig := &cloudsync.EngineConfig{
+    WalkerConfig: &cloudsync.WalkerConfig{
       MaxDepth:       app.config.GetInt("sync.max_depth"),
-      BatchSize:      app.config.GetInt("sync.batch_size"),
-      MaxConcurrent:  app.config.GetInt("sync.walker_concurrent"),
+      Strategy:       cloudsync.TraversalBFS,
     },
-    DownloadConfig: &sync.DownloadManagerConfig{
-      WorkerCount:    app.config.GetInt("sync.max_concurrent"),
-      ChunkSize:      app.config.GetInt64("sync.chunk_size_bytes"),
-      MaxRetries:     app.config.GetInt("sync.max_retries"),
-      RetryDelay:     app.config.GetDuration("sync.retry_delay"),
+    DownloadConfig: &cloudsync.DownloadManagerConfig{
+      MaxConcurrent:   app.config.GetInt("sync.max_concurrent"),
+      ChunkSize:       app.config.GetInt64("sync.chunk_size_bytes"),
+      VerifyChecksums: true,
+      TempDir:         app.config.GetString("sync.temp_dir"),
     },
-    WorkerConfig: &sync.WorkerPoolConfig{
-      MaxWorkers:     app.config.GetInt("sync.max_concurrent"),
-      QueueSize:      app.config.GetInt("sync.queue_size"),
+    WorkerConfig: &cloudsync.WorkerPoolConfig{
+      WorkerCount:     app.config.GetInt("sync.max_concurrent"),
+      MaxRetries:      app.config.GetInt("sync.max_retries"),
+      ShutdownTimeout: app.config.GetDuration("sync.shutdown_timeout"),
     },
     ProgressInterval:   app.config.GetDuration("sync.progress_interval"),
     CheckpointInterval: app.config.GetDuration("sync.checkpoint_interval"),
@@ -225,7 +234,7 @@ func (app *App) InitializeSyncEngine() error {
   }
 
   // Create sync engine
-  engine, err := sync.NewEngine(
+  engine, err := cloudsync.NewEngine(
     app.apiClient,
     app.stateManager,
     app.errorHandler,
@@ -361,7 +370,8 @@ func (app *App) GetSessions(ctx context.Context) ([]*state.Session, error) {
     return nil, errors.Errorf("state manager not initialized")
   }
 
-  return app.stateManager.GetAllSessions(ctx)
+  // Get up to 100 recent sessions
+  return app.stateManager.Sessions().List(ctx, 100, 0)
 }
 
 // GetLatestSession returns the most recent session
@@ -370,7 +380,7 @@ func (app *App) GetLatestSession(ctx context.Context) (*state.Session, error) {
     return nil, errors.Errorf("state manager not initialized")
   }
 
-  sessions, err := app.stateManager.GetAllSessions(ctx)
+  sessions, err := app.stateManager.Sessions().List(ctx, 100, 0)
   if err != nil {
     return nil, err
   }
@@ -384,7 +394,7 @@ func (app *App) GetLatestSession(ctx context.Context) (*state.Session, error) {
 }
 
 // GetProgress returns current sync progress
-func (app *App) GetProgress() *sync.SyncProgress {
+func (app *App) GetProgress() *cloudsync.SyncProgress {
   app.mu.RLock()
   defer app.mu.RUnlock()
 
@@ -434,8 +444,12 @@ func (app *App) initializeDatabase(dbPath string) error {
     return errors.Wrap(err, "failed to create data directory")
   }
 
-  // Initialize database schema
-  db, err := state.InitializeDatabase(dbPath)
+  // Create database config
+  dbConfig := state.DefaultConfig()
+  dbConfig.Path = dbPath
+  
+  // Initialize database
+  db, err := state.NewDB(dbConfig)
   if err != nil {
     return err
   }
@@ -482,7 +496,7 @@ func (app *App) monitorProgress(ctx context.Context) {
   ticker := time.NewTicker(time.Second)
   defer ticker.Stop()
 
-  lastProgress := &sync.SyncProgress{}
+  lastProgress := &cloudsync.SyncProgress{}
 
   for {
     select {

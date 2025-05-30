@@ -18,7 +18,6 @@ import (
   "context"
   "database/sql"
   "fmt"
-  "strings"
   "time"
 
   "github.com/jmoiron/sqlx"
@@ -26,7 +25,7 @@ import (
 
 // FileStore handles file-related database operations
 type FileStore struct {
-  db *DB
+  db DBInterface
 }
 
 // NewFileStore creates a new file store
@@ -492,7 +491,7 @@ func (s *FileStore) ResetFailedFiles(ctx context.Context, sessionID string, maxA
 // WithTx returns a FileStore that uses the given transaction
 func (s *FileStore) WithTx(tx *sqlx.Tx) *FileStore {
   return &FileStore{
-    db: &DB{DB: tx},
+    db: WrapTx(tx),
   }
 }
 

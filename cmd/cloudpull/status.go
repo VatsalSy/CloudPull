@@ -12,8 +12,6 @@ import (
   "github.com/jedib0t/go-pretty/v6/table"
   "github.com/schollz/progressbar/v3"
   "github.com/spf13/cobra"
-  "github.com/VatsalSy/CloudPull/internal/state"
-  "github.com/VatsalSy/CloudPull/internal/sync"
   "github.com/VatsalSy/CloudPull/pkg/progress"
 )
 
@@ -111,7 +109,6 @@ func showActiveSessions(sessions []ActiveSession) {
     fmt.Printf("  Source: %s → %s\n", session.Source, session.Destination)
 
     // Progress bar
-    progress := float64(session.DownloadedBytes) / float64(session.TotalBytes) * 100
     bar := progressbar.NewOptions64(
       session.TotalBytes,
       progressbar.OptionSetDescription("  Progress"),
@@ -305,73 +302,15 @@ type SystemStats struct {
 }
 
 func getActiveSessions() []ActiveSession {
-  // Get state manager instance
-  stateManager := state.GetManager()
-  if stateManager == nil {
-    return []ActiveSession{}
-  }
-  
-  // Get active sessions from state
-  sessions, err := stateManager.GetActiveSessions()
-  if err != nil {
-    return []ActiveSession{}
-  }
-  
-  activeSessions := make([]ActiveSession, 0, len(sessions))
-  
-  for _, session := range sessions {
-    // Get progress tracker for this session
-    tracker := getProgressTracker(session.ID)
-    if tracker == nil {
-      continue
-    }
-    
-    snapshot := tracker.GetSnapshot()
-    metrics := getMetricsCollector(session.ID)
-    
-    activeSession := ActiveSession{
-      ID:              session.ID,
-      StartTime:       session.StartTime,
-      Source:          session.Source,
-      Destination:     session.Destination,
-      TotalFiles:      int(snapshot.TotalFiles),
-      CompletedFiles:  int(snapshot.ProcessedFiles),
-      TotalBytes:      snapshot.TotalBytes,
-      DownloadedBytes: snapshot.ProcessedBytes,
-      Speed:           int64(snapshot.BytesPerSecond()),
-      CurrentFile:     snapshot.CurrentFile,
-      ETA:             snapshot.ETA(),
-    }
-    
-    // Get metrics if available
-    if metrics != nil {
-      stats := metrics.GetStats()
-      activeSession.AvgSpeed = int64(stats.AverageSpeed)
-      activeSession.Speed = int64(stats.CurrentSpeed)
-      
-      // Get recent completed files
-      activeSession.RecentFiles = getRecentFiles(session.ID, 5)
-    }
-    
-    activeSessions = append(activeSessions, activeSession)
-  }
-  
-  return activeSessions
+  // TODO: This should be passed from the app context
+  // For now, return empty since we don't have a global state manager
+  return []ActiveSession{}
 }
 
 func getSyncHistory() []SyncSession {
-  stateManager := state.GetManager()
-  if stateManager == nil {
-    return []SyncSession{}
-  }
-  
-  // Get completed sessions from state
-  sessions, err := stateManager.GetCompletedSessions(10) // Last 10 sessions
-  if err != nil {
-    return []SyncSession{}
-  }
-  
-  return sessions
+  // TODO: This should be passed from the app context
+  // For now, return empty since we don't have a global state manager
+  return []SyncSession{}
 }
 
 func getSystemStats() SystemStats {
@@ -452,26 +391,9 @@ func UnregisterProgressTracker(sessionID string) {
 
 // getRecentFiles returns recently completed files for a session
 func getRecentFiles(sessionID string, limit int) []CompletedFile {
-  stateManager := state.GetManager()
-  if stateManager == nil {
-    return nil
-  }
-  
-  // Get recent files from state
-  files, err := stateManager.GetRecentFiles(sessionID, limit)
-  if err != nil {
-    return nil
-  }
-  
-  completedFiles := make([]CompletedFile, 0, len(files))
-  for _, file := range files {
-    completedFiles = append(completedFiles, CompletedFile{
-      Name: file.Name,
-      Size: file.Size,
-    })
-  }
-  
-  return completedFiles
+  // TODO: This should be passed from the app context
+  // For now, return empty since we don't have a global state manager
+  return []CompletedFile{}
 }
 
 // getDiskStats returns disk usage statistics

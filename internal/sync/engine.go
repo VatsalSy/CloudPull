@@ -37,7 +37,7 @@ type Engine struct {
   client          *api.DriveClient
   stateManager    *state.Manager
   errorHandler    *errors.Handler
-  logger          logger.Logger
+  logger          *logger.Logger
   
   // Components
   walker          *FolderWalker
@@ -100,7 +100,7 @@ func NewEngine(
   client *api.DriveClient,
   stateManager *state.Manager,
   errorHandler *errors.Handler,
-  logger logger.Logger,
+  logger *logger.Logger,
   config *EngineConfig,
 ) (*Engine, error) {
   if config == nil {
@@ -310,12 +310,12 @@ func (e *Engine) startSync(ctx context.Context) error {
   e.progressTracker.OnEvent(func(event *ProgressEvent) {
     // Log significant events
     switch event.Type {
-    case EventTypeFileFailed:
+    case ProgressEventFileFailed:
       e.logger.Error(event.Error, "File download failed",
         "file", event.ItemName,
         "path", event.ItemPath,
       )
-    case EventTypeSessionUpdate:
+    case ProgressEventSessionUpdate:
       if event.FilesCompleted%100 == 0 {
         e.logger.Info("Sync progress",
           "completed", event.FilesCompleted,
@@ -625,20 +625,9 @@ func (e *Engine) createSession(rootFolderID, destinationPath string) (*state.Ses
     rootFolderName = info.Name
   }
   
-  // Create session
-  session := &state.Session{
-    ID:              generateID(),
-    RootFolderID:    rootFolderID,
-    RootFolderName:  state.NewNullString(rootFolderName),
-    DestinationPath: destinationPath,
-    StartTime:       time.Now(),
-    Status:          state.SessionStatusActive,
-    CreatedAt:       time.Now(),
-    UpdatedAt:       time.Now(),
-  }
-  
-  // Save to database
-  if err := e.stateManager.CreateSession(e.ctx, session); err != nil {
+  // Create session via state manager
+  session, err := e.stateManager.CreateSession(e.ctx, rootFolderID, rootFolderName, destinationPath)
+  if err != nil {
     return nil, errors.Wrap(err, "failed to create session")
   }
   

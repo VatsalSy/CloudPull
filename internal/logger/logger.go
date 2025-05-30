@@ -129,10 +129,14 @@ func FromContext(ctx context.Context) *Logger {
 }
 
 // With creates a child logger with additional fields
-func (l *Logger) With(fields map[string]interface{}) *Logger {
+func (l *Logger) With(fields ...interface{}) *Logger {
   newLogger := l.logger.With()
-  for k, v := range fields {
-    newLogger = newLogger.Interface(k, v)
+  
+  // Process fields as key-value pairs
+  for i := 0; i < len(fields)-1; i += 2 {
+    if key, ok := fields[i].(string); ok {
+      newLogger = newLogger.Interface(key, fields[i+1])
+    }
   }
   
   return &Logger{

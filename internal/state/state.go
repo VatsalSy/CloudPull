@@ -68,7 +68,7 @@ func New(databasePath string) (State, error) {
 }
 
 // NewWithConfig creates a new state manager with custom configuration
-func NewWithConfig(cfg Config) (State, error) {
+func NewWithConfig(cfg DBConfig) (State, error) {
   return NewManager(cfg)
 }
 

@@ -43,6 +43,9 @@ const (
   
   // ErrorTypeContext represents context cancellation or timeout
   ErrorTypeContext
+  
+  // ErrorTypeAPI represents general API errors
+  ErrorTypeAPI
 )
 
 // String returns the string representation of ErrorType
@@ -62,6 +65,8 @@ func (et ErrorType) String() string {
     return "Configuration"
   case ErrorTypeContext:
     return "Context"
+  case ErrorTypeAPI:
+    return "API"
   default:
     return "Unknown"
   }

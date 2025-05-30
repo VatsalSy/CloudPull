@@ -48,7 +48,7 @@ type DownloadManager struct {
   stateManager    *state.Manager
   progressTracker *ProgressTracker
   errorHandler    *errors.Handler
-  logger          logger.Logger
+  logger          *logger.Logger
   
   // Worker pool
   workerPool      *WorkerPool
@@ -111,7 +111,7 @@ func NewDownloadManager(
   stateManager *state.Manager,
   progressTracker *ProgressTracker,
   errorHandler *errors.Handler,
-  logger logger.Logger,
+  logger *logger.Logger,
   config *DownloadManagerConfig,
 ) (*DownloadManager, error) {
   if config == nil {

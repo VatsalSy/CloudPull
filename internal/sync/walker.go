@@ -87,7 +87,7 @@ type FolderWalker struct {
   client          *api.DriveClient
   stateManager    *state.Manager
   progressTracker *ProgressTracker
-  logger          logger.Logger
+  logger          *logger.Logger
   
   // Pattern matching
   includeRegexps  []*regexp.Regexp
@@ -120,7 +120,7 @@ func NewFolderWalker(
   client *api.DriveClient,
   stateManager *state.Manager,
   progressTracker *ProgressTracker,
-  logger logger.Logger,
+  logger *logger.Logger,
   config *WalkerConfig,
 ) (*FolderWalker, error) {
   if config == nil {
@@ -360,7 +360,6 @@ func (fw *FolderWalker) processFolder(
   depth int,
 ) (*state.Folder, []*state.File, []*api.FileInfo, error) {
   // Get folder metadata
-  var folderInfo *api.FileInfo
   var folderName string
   
   if folderID == "root" {
@@ -373,7 +372,6 @@ func (fw *FolderWalker) processFolder(
       fw.mu.Unlock()
       return nil, nil, nil, errors.Wrap(err, "failed to get folder metadata")
     }
-    folderInfo = info
     folderName = info.Name
   }
   
@@ -593,7 +591,3 @@ type WalkerStats struct {
   ErrorCount     int
 }
 
-// generateID generates a unique ID for database records
-func generateID() string {
-  return fmt.Sprintf("%d-%d", time.Now().UnixNano(), generateRandom())
-}

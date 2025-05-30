@@ -25,7 +25,7 @@ import (
 
 // FolderStore handles folder-related database operations
 type FolderStore struct {
-  db *DB
+  db DBInterface
 }
 
 // NewFolderStore creates a new folder store
@@ -385,6 +385,6 @@ func (s *FolderStore) CountByStatus(ctx context.Context, sessionID string) (map[
 // WithTx returns a FolderStore that uses the given transaction
 func (s *FolderStore) WithTx(tx *sqlx.Tx) *FolderStore {
   return &FolderStore{
-    db: &DB{DB: tx},
+    db: WrapTx(tx),
   }
 }

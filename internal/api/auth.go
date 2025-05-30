@@ -47,11 +47,11 @@ type AuthManager struct {
   tokenPath    string
   httpClient   *http.Client
   token        *oauth2.Token
-  logger       logger.Logger
+  logger       *logger.Logger
 }
 
 // NewAuthManager creates a new authentication manager
-func NewAuthManager(credentialsPath, tokenPath string, logger logger.Logger) (*AuthManager, error) {
+func NewAuthManager(credentialsPath, tokenPath string, logger *logger.Logger) (*AuthManager, error) {
   credBytes, err := os.ReadFile(credentialsPath)
   if err != nil {
     return nil, errors.Wrap(err, "failed to read credentials file")
@@ -138,7 +138,7 @@ func (am *AuthManager) loadToken() (*oauth2.Token, error) {
 
   // Validate token has required fields
   if token.AccessToken == "" && token.RefreshToken == "" {
-    return nil, errors.New("invalid token: missing access and refresh tokens")
+    return nil, errors.NewSimple("invalid token: missing access and refresh tokens")
   }
 
   return &token, nil

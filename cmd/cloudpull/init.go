@@ -156,7 +156,7 @@ func runInit(cmd *cobra.Command, args []string) error {
   viper.Set("sync.default_directory", config.DefaultSyncDir)
   viper.Set("sync.max_concurrent", config.MaxConcurrent)
   viper.Set("sync.chunk_size", config.ChunkSize)
-  viper.Set("sync.chunk_size_bytes", parseChunkSize(config.ChunkSize))
+  viper.Set("sync.chunk_size_bytes", int64(config.ChunkSize)*1024*1024) // Convert MB to bytes
   if config.EnableBandwidth {
     viper.Set("sync.bandwidth_limit", config.BandwidthLimit)
   }

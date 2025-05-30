@@ -36,8 +36,8 @@ type Manager struct {
 }
 
 // NewManager creates a new state manager
-func NewManager(cfg Config) (*Manager, error) {
-  db, err := New(cfg)
+func NewManager(cfg DBConfig) (*Manager, error) {
+  db, err := NewDB(cfg)
   if err != nil {
     return nil, fmt.Errorf("failed to create database: %w", err)
   }
@@ -373,8 +373,21 @@ func (m *Manager) SetConfig(ctx context.Context, key, value string) error {
 }
 
 // CreateSession creates a new session
-func (m *Manager) CreateSession(ctx context.Context, session *Session) error {
-  return m.sessions.Create(ctx, session)
+func (m *Manager) CreateSession(ctx context.Context, rootFolderID, rootFolderName, destinationPath string) (*Session, error) {
+  session := &Session{
+    RootFolderID:    rootFolderID,
+    RootFolderName:  sql.NullString{String: rootFolderName, Valid: rootFolderName != ""},
+    DestinationPath: destinationPath,
+    Status:          SessionStatusActive,
+    StartTime:       time.Now(),
+  }
+  
+  err := m.sessions.Create(ctx, session)
+  if err != nil {
+    return nil, err
+  }
+  
+  return session, nil
 }
 
 // GetSession retrieves a session by ID
@@ -424,7 +437,7 @@ func (m *Manager) CreateFiles(ctx context.Context, files []*File) error {
 
 // UpdateFileStatus updates the status of a file
 func (m *Manager) UpdateFileStatus(ctx context.Context, file *File) error {
-  return m.files.UpdateStatus(ctx, file.ID, file.Status, file.BytesDownloaded)
+  return m.files.UpdateStatus(ctx, file.ID, file.Status)
 }
 
 // GetPendingFiles retrieves pending files for a session

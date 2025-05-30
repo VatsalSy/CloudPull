@@ -39,8 +39,8 @@ type DB struct {
   maxIdleTime time.Duration
 }
 
-// Config holds database configuration
-type Config struct {
+// DBConfig holds database configuration
+type DBConfig struct {
   Path         string
   MaxOpenConns int
   MaxIdleConns int
@@ -48,8 +48,8 @@ type Config struct {
 }
 
 // DefaultConfig returns default database configuration
-func DefaultConfig() Config {
-  return Config{
+func DefaultConfig() DBConfig {
+  return DBConfig{
     Path:         "cloudpull.db",
     MaxOpenConns: 25,
     MaxIdleConns: 5,
@@ -57,8 +57,8 @@ func DefaultConfig() Config {
   }
 }
 
-// New creates a new database connection
-func New(cfg Config) (*DB, error) {
+// NewDB creates a new database connection
+func NewDB(cfg DBConfig) (*DB, error) {
   // Open database connection
   db, err := sqlx.Open("sqlite3", fmt.Sprintf("%s?_foreign_keys=on&_journal_mode=WAL", cfg.Path))
   if err != nil {

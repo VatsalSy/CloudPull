@@ -25,29 +25,15 @@ import (
 type ProgressEventType string
 
 const (
-  // EventTypeFileStarted indicates a file download has started
-  EventTypeFileStarted ProgressEventType = "file_started"
-  
-  // EventTypeFileProgress indicates file download progress
-  EventTypeFileProgress ProgressEventType = "file_progress"
-  
-  // EventTypeFileCompleted indicates a file download completed
-  EventTypeFileCompleted ProgressEventType = "file_completed"
-  
-  // EventTypeFileFailed indicates a file download failed
-  EventTypeFileFailed ProgressEventType = "file_failed"
-  
-  // EventTypeFolderStarted indicates folder scanning started
-  EventTypeFolderStarted ProgressEventType = "folder_started"
-  
-  // EventTypeFolderCompleted indicates folder scanning completed
-  EventTypeFolderCompleted ProgressEventType = "folder_completed"
-  
-  // EventTypeSessionUpdate indicates overall session progress
-  EventTypeSessionUpdate ProgressEventType = "session_update"
-  
-  // EventTypeBandwidthUpdate indicates bandwidth stats update
-  EventTypeBandwidthUpdate ProgressEventType = "bandwidth_update"
+  // Progress event types as strings for better readability
+  ProgressEventFileStarted ProgressEventType = "file_started"
+  ProgressEventFileProgress ProgressEventType = "file_progress"
+  ProgressEventFileCompleted ProgressEventType = "file_completed"
+  ProgressEventFileFailed ProgressEventType = "file_failed"
+  ProgressEventFolderStarted ProgressEventType = "folder_started"
+  ProgressEventFolderCompleted ProgressEventType = "folder_completed"
+  ProgressEventSessionUpdate ProgressEventType = "session_update"
+  ProgressEventBandwidthUpdate ProgressEventType = "bandwidth_update"
 )
 
 // ProgressEvent represents a progress update event
@@ -174,7 +160,7 @@ func (pt *ProgressTracker) FileStarted(fileID, fileName, filePath string, totalB
   pt.mu.Unlock()
   
   pt.emit(&ProgressEvent{
-    Type:      EventTypeFileStarted,
+    Type:      ProgressEventFileStarted,
     Timestamp: time.Now(),
     SessionID: pt.sessionID,
     ItemID:    fileID,
@@ -214,7 +200,7 @@ func (pt *ProgressTracker) FileProgress(fileID string, bytesDownloaded int64) {
   pt.updateSpeed(deltaBytes)
   
   pt.emit(&ProgressEvent{
-    Type:             EventTypeFileProgress,
+    Type:             ProgressEventFileProgress,
     Timestamp:        now,
     SessionID:        pt.sessionID,
     ItemID:           fileID,
@@ -248,7 +234,7 @@ func (pt *ProgressTracker) FileCompleted(fileID string) {
   pt.mu.Unlock()
   
   pt.emit(&ProgressEvent{
-    Type:             EventTypeFileCompleted,
+    Type:             ProgressEventFileCompleted,
     Timestamp:        time.Now(),
     SessionID:        pt.sessionID,
     ItemID:           fileID,
@@ -284,7 +270,7 @@ func (pt *ProgressTracker) FileFailed(fileID string, err error) {
   }
   
   pt.emit(&ProgressEvent{
-    Type:         EventTypeFileFailed,
+    Type:         ProgressEventFileFailed,
     Timestamp:    time.Now(),
     SessionID:    pt.sessionID,
     ItemID:       fileID,
@@ -302,7 +288,7 @@ func (pt *ProgressTracker) FileSkipped(fileID, fileName, filePath string, reason
   atomic.AddInt64(&pt.skippedFiles, 1)
   
   pt.emit(&ProgressEvent{
-    Type:      EventTypeFileCompleted,
+    Type:      ProgressEventFileCompleted,
     Timestamp: time.Now(),
     SessionID: pt.sessionID,
     ItemID:    fileID,
@@ -320,7 +306,7 @@ func (pt *ProgressTracker) FileSkipped(fileID, fileName, filePath string, reason
 // FolderStarted notifies that folder scanning started
 func (pt *ProgressTracker) FolderStarted(folderID, folderName, folderPath string) {
   pt.emit(&ProgressEvent{
-    Type:      EventTypeFolderStarted,
+    Type:      ProgressEventFolderStarted,
     Timestamp: time.Now(),
     SessionID: pt.sessionID,
     ItemID:    folderID,
@@ -332,7 +318,7 @@ func (pt *ProgressTracker) FolderStarted(folderID, folderName, folderPath string
 // FolderCompleted notifies that folder scanning completed
 func (pt *ProgressTracker) FolderCompleted(folderID, folderName, folderPath string, fileCount int64) {
   pt.emit(&ProgressEvent{
-    Type:      EventTypeFolderCompleted,
+    Type:      ProgressEventFolderCompleted,
     Timestamp: time.Now(),
     SessionID: pt.sessionID,
     ItemID:    folderID,
@@ -468,7 +454,7 @@ func (pt *ProgressTracker) emitSessionUpdate() {
   stats := pt.GetStats()
   
   pt.emit(&ProgressEvent{
-    Type:             EventTypeSessionUpdate,
+    Type:             ProgressEventSessionUpdate,
     Timestamp:        time.Now(),
     SessionID:        pt.sessionID,
     FilesCompleted:   stats.CompletedFiles,

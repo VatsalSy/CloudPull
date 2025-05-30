@@ -66,12 +66,12 @@ var exportExtensions = map[string]string{
 type DriveClient struct {
   service      *drive.Service
   rateLimiter  *RateLimiter
-  logger       logger.Logger
+  logger       *logger.Logger
   chunkSize    int64
 }
 
 // NewDriveClient creates a new Drive API client
-func NewDriveClient(service *drive.Service, rateLimiter *RateLimiter, logger logger.Logger) *DriveClient {
+func NewDriveClient(service *drive.Service, rateLimiter *RateLimiter, logger *logger.Logger) *DriveClient {
   return &DriveClient{
     service:     service,
     rateLimiter: rateLimiter,
@@ -226,7 +226,8 @@ func (dc *DriveClient) downloadRegularFile(ctx context.Context, fileID string, d
     // Download chunk with retries
     var resp *http.Response
     err := dc.retryWithBackoff(ctx, func() error {
-      req := dc.service.Files.Get(fileID).Alt("media")
+      req := dc.service.Files.Get(fileID)
+      req = req.AcknowledgeAbuse(true) // Handle potential abuse warnings
       req.Header().Set("Range", fmt.Sprintf("bytes=%d-%d", startOffset, endOffset))
       
       var err error
@@ -458,7 +459,8 @@ func (dc *DriveClient) GetFileContent(ctx context.Context, fileID string, startO
   }
 
   // Create request with byte range
-  req := dc.service.Files.Get(fileID).Alt("media")
+  req := dc.service.Files.Get(fileID)
+  req = req.AcknowledgeAbuse(true)
   req.Header().Set("Range", fmt.Sprintf("bytes=%d-%d", startOffset, endOffset))
   
   var resp *http.Response

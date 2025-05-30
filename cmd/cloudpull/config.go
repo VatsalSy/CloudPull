@@ -13,7 +13,6 @@ import (
   "github.com/jedib0t/go-pretty/v6/table"
   "github.com/spf13/cobra"
   "github.com/spf13/viper"
-  "gopkg.in/yaml.v3"
 )
 
 var configCmd = &cobra.Command{
@@ -301,12 +300,12 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
   fmt.Printf("Opening %s in %s...\n", configFile, editor)
   
   // Open editor
-  cmd := exec.Command(editor, configFile)
-  cmd.Stdin = os.Stdin
-  cmd.Stdout = os.Stdout
-  cmd.Stderr = os.Stderr
+  editorCmd := exec.Command(editor, configFile)
+  editorCmd.Stdin = os.Stdin
+  editorCmd.Stdout = os.Stdout
+  editorCmd.Stderr = os.Stderr
   
-  if err := cmd.Run(); err != nil {
+  if err := editorCmd.Run(); err != nil {
     return fmt.Errorf("failed to open editor: %w", err)
   }
 

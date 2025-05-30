@@ -25,7 +25,7 @@ import (
 
 // SessionStore handles session-related database operations
 type SessionStore struct {
-  db *DB
+  db DBInterface
 }
 
 // NewSessionStore creates a new session store
@@ -359,6 +359,6 @@ type SessionProgressDelta struct {
 // WithTx returns a SessionStore that uses the given transaction
 func (s *SessionStore) WithTx(tx *sqlx.Tx) *SessionStore {
   return &SessionStore{
-    db: &DB{DB: tx},
+    db: WrapTx(tx),
   }
 }
