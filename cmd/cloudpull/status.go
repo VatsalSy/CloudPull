@@ -1,6 +1,7 @@
 package main
 
 import (
+  "context"
   "fmt"
   "os"
   "runtime"
@@ -12,6 +13,8 @@ import (
   "github.com/jedib0t/go-pretty/v6/table"
   "github.com/schollz/progressbar/v3"
   "github.com/spf13/cobra"
+  "github.com/VatsalSy/CloudPull/internal/app"
+  "github.com/VatsalSy/CloudPull/internal/state"
   "github.com/VatsalSy/CloudPull/pkg/progress"
 )
 
@@ -302,15 +305,47 @@ type SystemStats struct {
 }
 
 func getActiveSessions() []ActiveSession {
-  // TODO: This should be passed from the app context
-  // For now, return empty since we don't have a global state manager
-  return []ActiveSession{}
+  app, err := getOrCreateApp()
+  if err != nil {
+    return []ActiveSession{}
+  }
+  
+  ctx := context.Background()
+  sessions, err := app.GetSessions(ctx)
+  if err != nil {
+    return []ActiveSession{}
+  }
+  
+  var activeSessions []ActiveSession
+  for _, session := range sessions {
+    if session.Status == "active" || session.Status == "paused" {
+      activeSessions = append(activeSessions, convertToActiveSession(session))
+    }
+  }
+  
+  return activeSessions
 }
 
 func getSyncHistory() []SyncSession {
-  // TODO: This should be passed from the app context
-  // For now, return empty since we don't have a global state manager
-  return []SyncSession{}
+  app, err := getOrCreateApp()
+  if err != nil {
+    return []SyncSession{}
+  }
+  
+  ctx := context.Background()
+  sessions, err := app.GetSessions(ctx)
+  if err != nil {
+    return []SyncSession{}
+  }
+  
+  var history []SyncSession
+  for _, session := range sessions {
+    if session.Status == "completed" || session.Status == "failed" || session.Status == "cancelled" {
+      history = append(history, convertToSyncSession(session))
+    }
+  }
+  
+  return history
 }
 
 func getSystemStats() SystemStats {
@@ -422,4 +457,70 @@ type SyncSession struct {
   TotalBytes int64
   Failed     bool
   Cancelled  bool
+}
+
+// getOrCreateApp returns a shared app instance
+func getOrCreateApp() (*app.App, error) {
+  application, err := app.New()
+  if err != nil {
+    return nil, err
+  }
+  
+  if err := application.Initialize(); err != nil {
+    return nil, err
+  }
+  
+  return application, nil
+}
+
+// convertToActiveSession converts a state.Session to ActiveSession
+func convertToActiveSession(session *state.Session) ActiveSession {
+  var eta time.Duration
+  if session.CompletedBytes > 0 && session.TotalBytes > 0 {
+    elapsed := time.Since(session.StartTime)
+    progress := float64(session.CompletedBytes) / float64(session.TotalBytes)
+    if progress > 0 {
+      totalTime := time.Duration(float64(elapsed) / progress)
+      eta = totalTime - elapsed
+    }
+  }
+  
+  var speed int64
+  if elapsed := time.Since(session.StartTime); elapsed > 0 {
+    speed = int64(float64(session.CompletedBytes) / elapsed.Seconds())
+  }
+  
+  return ActiveSession{
+    ID:              session.ID,
+    StartTime:       session.StartTime,
+    Source:          session.RootFolderName,
+    Destination:     session.DestinationPath,
+    TotalFiles:      int(session.TotalFiles),
+    CompletedFiles:  int(session.CompletedFiles),
+    TotalBytes:      session.TotalBytes,
+    DownloadedBytes: session.CompletedBytes,
+    Speed:           speed,
+    AvgSpeed:        speed,
+    PeakSpeed:       speed,
+    ETA:             eta,
+  }
+}
+
+// convertToSyncSession converts a state.Session to SyncSession
+func convertToSyncSession(session *state.Session) SyncSession {
+  endTime := time.Now()
+  if session.EndTime.Valid {
+    endTime = session.EndTime.Time
+  }
+  
+  return SyncSession{
+    ID:         session.ID,
+    StartTime:  session.StartTime,
+    EndTime:    endTime,
+    Duration:   endTime.Sub(session.StartTime),
+    TotalFiles: int(session.TotalFiles),
+    TotalBytes: session.TotalBytes,
+    Failed:     session.Status == state.SessionStatusFailed,
+    Cancelled:  session.Status == state.SessionStatusCancelled,
+  }
 }

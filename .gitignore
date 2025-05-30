@@ -12,6 +12,8 @@ CLAUDE.md
 *.so
 *.dylib
 bin/
+cloudpull
+/cloudpull
 
 # Test binary, built with `go test -c`
 *.test
@@ -19,6 +21,11 @@ bin/
 # Output of the go coverage tool
 *.out
 coverage.html
+coverage.txt
+
+# Security reports
+security-report.json
+gosec-results.sarif
 
 # Go workspace file
 go.work
@@ -69,3 +76,6 @@ __debug_bin
 # Configuration files with sensitive data
 config.local.yaml
 config.prod.yaml
+
+# Pre-commit
+.pre-commit-config.yaml.lock

@@ -46,6 +46,7 @@ var (
   dryRun         bool
   noProgress     bool
   maxDepth       int
+  noConfirm      bool
 )
 
 func init() {
@@ -61,6 +62,8 @@ func init() {
     "Disable progress bars")
   syncCmd.Flags().IntVar(&maxDepth, "max-depth", -1,
     "Maximum folder depth to sync (-1 for unlimited)")
+  syncCmd.Flags().BoolVarP(&noConfirm, "yes", "y", false,
+    "Skip confirmation prompt")
 }
 
 func runSync(cmd *cobra.Command, args []string) error {
@@ -121,7 +124,7 @@ func runSync(cmd *cobra.Command, args []string) error {
   }
   fmt.Println()
 
-  if !dryRun {
+  if !dryRun && !noConfirm {
     var proceed bool
     prompt := &survey.Confirm{
       Message: "Start sync?",

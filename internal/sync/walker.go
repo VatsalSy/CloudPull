@@ -164,6 +164,8 @@ func NewFolderWalker(
 
 // Walk starts walking the folder tree from the given root
 func (fw *FolderWalker) Walk(ctx context.Context, rootFolderID string, sessionID string) (<-chan *WalkResult, error) {
+  fw.logger.Debug("Walk called", "rootFolderID", rootFolderID, "sessionID", sessionID, "strategy", fw.config.Strategy)
+  
   // Create cancellable context
   fw.ctx, fw.cancel = context.WithCancel(ctx)
   
@@ -173,9 +175,11 @@ func (fw *FolderWalker) Walk(ctx context.Context, rootFolderID string, sessionID
   // Start walking based on strategy
   switch fw.config.Strategy {
   case TraversalBFS:
+    fw.logger.Debug("Starting BFS traversal")
     fw.wg.Add(1)
     go fw.walkBFS(rootFolderID, sessionID, resultChan)
   case TraversalDFS:
+    fw.logger.Debug("Starting DFS traversal")
     fw.wg.Add(1)
     go fw.walkDFS(rootFolderID, sessionID, "", 0, resultChan)
   default:
@@ -189,6 +193,7 @@ func (fw *FolderWalker) Walk(ctx context.Context, rootFolderID string, sessionID
     close(resultChan)
   }()
   
+  fw.logger.Debug("Walk started successfully")
   return resultChan, nil
 }
 
@@ -216,6 +221,7 @@ func (fw *FolderWalker) GetStats() *WalkerStats {
 // walkBFS performs breadth-first search traversal
 func (fw *FolderWalker) walkBFS(rootFolderID string, sessionID string, resultChan chan<- *WalkResult) {
   defer fw.wg.Done()
+  fw.logger.Debug("walkBFS started", "rootFolderID", rootFolderID, "sessionID", sessionID)
   
   type folderTask struct {
     folderID   string
@@ -229,6 +235,7 @@ func (fw *FolderWalker) walkBFS(rootFolderID string, sessionID string, resultCha
   // Start workers
   workers := fw.config.Concurrency
   workerWg := sync.WaitGroup{}
+  fw.logger.Debug("Starting workers", "count", workers)
   
   for i := 0; i < workers; i++ {
     workerWg.Add(1)
@@ -359,20 +366,25 @@ func (fw *FolderWalker) processFolder(
   sessionID string,
   depth int,
 ) (*state.Folder, []*state.File, []*api.FileInfo, error) {
+  fw.logger.Debug("processFolder called", "folderID", folderID, "parentPath", parentPath, "depth", depth)
+  
   // Get folder metadata
   var folderName string
   
   if folderID == "root" {
     folderName = "root"
   } else {
+    fw.logger.Debug("Getting folder metadata from API", "folderID", folderID)
     info, err := fw.client.GetFile(fw.ctx, folderID)
     if err != nil {
+      fw.logger.Error(err, "Failed to get folder metadata", "folderID", folderID)
       fw.mu.Lock()
       fw.errors = append(fw.errors, err)
       fw.mu.Unlock()
       return nil, nil, nil, errors.Wrap(err, "failed to get folder metadata")
     }
     folderName = info.Name
+    fw.logger.Debug("Got folder metadata", "folderName", folderName)
   }
   
   folderPath := filepath.Join(parentPath, folderName)

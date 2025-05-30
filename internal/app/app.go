@@ -216,6 +216,8 @@ func (app *App) InitializeSyncEngine() error {
     WalkerConfig: &cloudsync.WalkerConfig{
       MaxDepth:       app.config.GetInt("sync.max_depth"),
       Strategy:       cloudsync.TraversalBFS,
+      Concurrency:    3, // Number of concurrent folder scanners
+      ChannelBufferSize: 100,
     },
     DownloadConfig: &cloudsync.DownloadManagerConfig{
       MaxConcurrent:   app.config.GetInt("sync.max_concurrent"),
@@ -312,8 +314,16 @@ func (app *App) StartSync(ctx context.Context, folderID, outputDir string, optio
   // Monitor progress
   go app.monitorProgress(ctx)
 
-  // Wait for completion
-  <-ctx.Done()
+  // Wait for completion or cancellation
+  select {
+  case <-app.syncEngine.WaitForCompletion():
+    // Sync completed naturally
+    app.logger.Info("Sync completed")
+  case <-ctx.Done():
+    // Context cancelled (user interrupt)
+    app.logger.Info("Sync cancelled")
+    app.syncEngine.Stop()
+  }
 
   app.mu.Lock()
   app.isRunning = false
@@ -354,8 +364,16 @@ func (app *App) ResumeSync(ctx context.Context, sessionID string) error {
   // Monitor progress
   go app.monitorProgress(ctx)
 
-  // Wait for completion
-  <-ctx.Done()
+  // Wait for completion or cancellation
+  select {
+  case <-app.syncEngine.WaitForCompletion():
+    // Sync completed naturally
+    app.logger.Info("Sync completed")
+  case <-ctx.Done():
+    // Context cancelled (user interrupt)
+    app.logger.Info("Sync cancelled")
+    app.syncEngine.Stop()
+  }
 
   app.mu.Lock()
   app.isRunning = false

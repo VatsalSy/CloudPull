@@ -32,7 +32,7 @@ import (
 
 const (
   // OAuth2 redirect URL for local authentication
-  redirectURL = "http://localhost:8080/callback"
+  redirectURL = "http://localhost"
   
   // Default token file permissions (owner read/write only)
   tokenFilePerms = 0600
@@ -197,8 +197,16 @@ func (am *AuthManager) authenticate(ctx context.Context) (*oauth2.Token, error) 
   authURL := am.config.AuthCodeURL("state", oauth2.AccessTypeOffline)
   
   fmt.Printf("\nTo authenticate, please visit:\n%s\n\n", authURL)
-  fmt.Println("After authorization, you'll be redirected to a local URL.")
-  fmt.Println("Copy the authorization code from the URL and paste it here.")
+  fmt.Println("After clicking 'Allow', you'll be redirected to a URL starting with:")
+  fmt.Println("http://localhost/?code=...")
+  fmt.Println("")
+  fmt.Println("If you see a browser error (This site can't be reached), that's normal!")
+  fmt.Println("Look at the URL bar and copy the authorization code.")
+  fmt.Println("The code is the value after 'code=' and before any '&' character.")
+  fmt.Println("")
+  fmt.Println("Example: If the URL is:")
+  fmt.Println("http://localhost/?code=4/0AY0e-g7ABC123&scope=...")
+  fmt.Println("Then copy: 4/0AY0e-g7ABC123")
   fmt.Print("\nEnter authorization code: ")
 
   var authCode string

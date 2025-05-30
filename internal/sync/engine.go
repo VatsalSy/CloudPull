@@ -56,6 +56,7 @@ type Engine struct {
   // State
   isPaused        bool
   isRunning       bool
+  walkingComplete bool
   
   // Channels
   errorChan       chan error
@@ -130,7 +131,7 @@ func (e *Engine) StartNewSession(ctx context.Context, rootFolderID, destinationP
   }
   
   // Create new session
-  session, err := e.createSession(rootFolderID, destinationPath)
+  session, err := e.createSession(ctx, rootFolderID, destinationPath)
   if err != nil {
     return errors.Wrap(err, "failed to create session")
   }
@@ -298,6 +299,11 @@ func (e *Engine) GetProgress() *SyncProgress {
   }
 }
 
+// WaitForCompletion waits until the sync engine completes
+func (e *Engine) WaitForCompletion() <-chan struct{} {
+  return e.doneChan
+}
+
 // startSync starts the sync process
 func (e *Engine) startSync(ctx context.Context) error {
   // Create cancellable context
@@ -360,6 +366,7 @@ func (e *Engine) startSync(ctx context.Context) error {
   
   // Mark as running
   e.isRunning = true
+  e.walkingComplete = false
   
   // Update session status
   e.currentSession.Status = state.SessionStatusActive
@@ -378,6 +385,10 @@ func (e *Engine) startSync(ctx context.Context) error {
   // Start error monitor
   e.wg.Add(1)
   go e.runErrorMonitor()
+  
+  // Start completion checker
+  e.wg.Add(1)
+  go e.runCompletionChecker()
   
   e.logger.Info("Sync engine started",
     "session_id", e.sessionID,
@@ -401,6 +412,9 @@ func (e *Engine) runSync() {
       "total_files", e.currentSession.TotalFiles,
     )
     
+    // When resuming, walking is already complete
+    e.walkingComplete = true
+    
     // Schedule pending downloads
     if err := e.schedulePendingDownloads(); err != nil {
       e.logger.Error(err, "Failed to schedule pending downloads")
@@ -410,11 +424,13 @@ func (e *Engine) runSync() {
   } else {
     // Start folder walking
     e.logger.Info("Starting folder scan")
+    e.logger.Debug("About to call startFolderWalk", "rootFolderID", e.currentSession.RootFolderID)
     if err := e.startFolderWalk(); err != nil {
       e.logger.Error(err, "Failed to start folder walk")
       e.handleFatalError(err)
       return
     }
+    e.logger.Debug("startFolderWalk completed successfully")
   }
   
   // Wait for completion or cancellation
@@ -435,11 +451,15 @@ func (e *Engine) runSync() {
 
 // startFolderWalk starts the folder walking process
 func (e *Engine) startFolderWalk() error {
+  e.logger.Debug("startFolderWalk called", "rootFolderID", e.currentSession.RootFolderID, "sessionID", e.sessionID)
+  
   // Start walking from root folder
   resultChan, err := e.walker.Walk(e.ctx, e.currentSession.RootFolderID, e.sessionID)
   if err != nil {
+    e.logger.Error(err, "Failed to start walker")
     return err
   }
+  e.logger.Debug("Walker started successfully")
   
   // Process walk results
   go func() {
@@ -505,6 +525,10 @@ func (e *Engine) startFolderWalk() error {
       "files", totalFiles,
       "size", formatBytes(totalBytes),
     )
+    
+    // Signal that walking is complete
+    e.walkingComplete = true
+    e.checkIfSyncComplete()
   }()
   
   return nil
@@ -588,6 +612,23 @@ func (e *Engine) runErrorMonitor() {
   }
 }
 
+// runCompletionChecker periodically checks if the sync is complete
+func (e *Engine) runCompletionChecker() {
+  defer e.wg.Done()
+  
+  ticker := time.NewTicker(5 * time.Second)
+  defer ticker.Stop()
+  
+  for {
+    select {
+    case <-e.ctx.Done():
+      return
+    case <-ticker.C:
+      e.checkIfSyncComplete()
+    }
+  }
+}
+
 // cleanup performs cleanup after sync stops
 func (e *Engine) cleanup() {
   e.mu.Lock()
@@ -612,13 +653,13 @@ func (e *Engine) cleanup() {
 // Helper methods
 
 // createSession creates a new sync session
-func (e *Engine) createSession(rootFolderID, destinationPath string) (*state.Session, error) {
+func (e *Engine) createSession(ctx context.Context, rootFolderID, destinationPath string) (*state.Session, error) {
   // Get root folder name
   var rootFolderName string
   if rootFolderID == "root" {
     rootFolderName = "My Drive"
   } else {
-    info, err := e.client.GetFile(e.ctx, rootFolderID)
+    info, err := e.client.GetFile(ctx, rootFolderID)
     if err != nil {
       return nil, errors.Wrap(err, "failed to get root folder info")
     }
@@ -626,7 +667,7 @@ func (e *Engine) createSession(rootFolderID, destinationPath string) (*state.Ses
   }
   
   // Create session via state manager
-  session, err := e.stateManager.CreateSession(e.ctx, rootFolderID, rootFolderName, destinationPath)
+  session, err := e.stateManager.CreateSession(ctx, rootFolderID, rootFolderName, destinationPath)
   if err != nil {
     return nil, errors.Wrap(err, "failed to create session")
   }
@@ -679,6 +720,40 @@ func (e *Engine) getStatus() string {
     return "paused"
   }
   return "running"
+}
+
+// checkIfSyncComplete checks if the sync is complete and cancels the context if so
+func (e *Engine) checkIfSyncComplete() {
+  e.mu.RLock()
+  defer e.mu.RUnlock()
+  
+  // Check if walking is complete
+  if !e.walkingComplete {
+    return
+  }
+  
+  // Check if all downloads are complete
+  stats := e.progressTracker.GetStats()
+  totalProcessed := stats.CompletedFiles + stats.FailedFiles + stats.SkippedFiles
+  
+  if totalProcessed >= stats.TotalFiles && stats.TotalFiles > 0 {
+    // Check worker pool status
+    if e.downloader != nil {
+      downloaderStats := e.downloader.GetStats()
+      if downloaderStats.ActiveDownloads == 0 && downloaderStats.WorkerPoolStats.QueuedTasks == 0 {
+        e.logger.Info("All downloads complete, stopping sync engine",
+          "total_files", stats.TotalFiles,
+          "completed", stats.CompletedFiles,
+          "failed", stats.FailedFiles,
+          "skipped", stats.SkippedFiles,
+        )
+        // Cancel context to trigger shutdown
+        if e.cancel != nil {
+          e.cancel()
+        }
+      }
+    }
+  }
 }
 
 // SyncProgress represents the current sync progress

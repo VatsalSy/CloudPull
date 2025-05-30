@@ -42,6 +42,12 @@ build: deps ## Build the CloudPull binary
 	$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./$(MAIN_PATH)
 	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
 
+.PHONY: test-build
+test-build: ## Test if the project builds without creating artifacts
+	@echo "Testing build..."
+	@$(GOBUILD) -o /dev/null ./$(MAIN_PATH)
+	@echo "Build test successful"
+
 .PHONY: install
 install: build ## Install CloudPull to GOPATH/bin
 	@echo "Installing CloudPull..."
@@ -86,6 +92,34 @@ lint: ## Run linters
 		golangci-lint run; \
 	else \
 		echo "golangci-lint not installed. Run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
+		exit 1; \
+	fi
+
+.PHONY: lint-fix
+lint-fix: ## Run linters with auto-fix
+	@echo "Running linters with auto-fix..."
+	@if command -v golangci-lint &> /dev/null; then \
+		golangci-lint run --fix; \
+	else \
+		echo "golangci-lint not installed. Run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
+		exit 1; \
+	fi
+
+.PHONY: lint-install
+lint-install: ## Install linting tools
+	@echo "Installing linting tools..."
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/securego/gosec/v2/cmd/gosec@latest
+	@echo "Linting tools installed"
+
+.PHONY: security
+security: ## Run security checks
+	@echo "Running security checks..."
+	@if command -v gosec &> /dev/null; then \
+		gosec -fmt json -out security-report.json ./...; \
+		@echo "Security report generated: security-report.json"; \
+	else \
+		echo "gosec not installed. Run: go install github.com/securego/gosec/v2/cmd/gosec@latest"; \
 	fi
 
 .PHONY: fmt
@@ -102,14 +136,9 @@ vet: ## Run go vet
 clean: ## Clean build artifacts
 	@echo "Cleaning..."
 	@rm -rf $(BUILD_DIR)
-	@rm -f coverage.out coverage.html
+	@rm -f coverage.out coverage.html security-report.json
 	@echo "Clean complete"
 
-.PHONY: deps
-deps: ## Download dependencies
-	@echo "Downloading dependencies..."
-	$(GOMOD) download
-	$(GOMOD) tidy
 
 .PHONY: update-deps
 update-deps: ## Update dependencies
@@ -118,8 +147,35 @@ update-deps: ## Update dependencies
 	$(GOMOD) tidy
 
 .PHONY: verify
-verify: fmt vet test ## Run fmt, vet, and tests
+verify: fmt vet lint test ## Run fmt, vet, lint, and tests
 	@echo "Verification complete"
+
+.PHONY: quick-check
+quick-check: fmt vet test-build ## Quick checks: format, vet, and build test
+	@echo "Quick check complete"
+
+.PHONY: pre-commit
+pre-commit: ## Run pre-commit checks on all files
+	@echo "Running pre-commit checks..."
+	@if command -v pre-commit &> /dev/null; then \
+		pre-commit run --all-files; \
+	else \
+		echo "pre-commit not installed. Run: ./scripts/install-hooks.sh"; \
+	fi
+
+.PHONY: pre-commit-install
+pre-commit-install: ## Install pre-commit hooks
+	@echo "Installing pre-commit hooks..."
+	@./scripts/install-hooks.sh
+
+.PHONY: pre-commit-update
+pre-commit-update: ## Update pre-commit hooks
+	@echo "Updating pre-commit hooks..."
+	@if command -v pre-commit &> /dev/null; then \
+		pre-commit autoupdate; \
+	else \
+		echo "pre-commit not installed. Run: ./scripts/install-hooks.sh"; \
+	fi
 
 # Development helpers
 

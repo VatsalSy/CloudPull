@@ -96,12 +96,16 @@ type FileInfo struct {
 
 // ListFiles lists files in a folder with pagination
 func (dc *DriveClient) ListFiles(ctx context.Context, folderID string, pageToken string) ([]*FileInfo, string, error) {
+  dc.logger.Debug("ListFiles called", "folderID", folderID, "pageToken", pageToken)
+  
   // Wait for rate limit
   if err := dc.rateLimiter.Wait(ctx); err != nil {
+    dc.logger.Error(err, "Rate limiter error")
     return nil, "", err
   }
 
   query := fmt.Sprintf("'%s' in parents and trashed = false", folderID)
+  dc.logger.Debug("Constructed query", "query", query)
   
   call := dc.service.Files.List().
     Q(query).
@@ -113,16 +117,22 @@ func (dc *DriveClient) ListFiles(ctx context.Context, folderID string, pageToken
     call = call.PageToken(pageToken)
   }
 
+  dc.logger.Debug("Executing API call")
   var fileList *drive.FileList
   err := dc.retryWithBackoff(ctx, func() error {
     var err error
     fileList, err = call.Do()
+    if err != nil {
+      dc.logger.Error(err, "API call failed")
+    }
     return err
   })
   
   if err != nil {
+    dc.logger.Error(err, "Failed to list files after retries")
     return nil, "", errors.Wrap(err, "failed to list files")
   }
+  dc.logger.Debug("API call successful", "fileCount", len(fileList.Files))
 
   files := make([]*FileInfo, 0, len(fileList.Files))
   for _, f := range fileList.Files {
