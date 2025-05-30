@@ -293,6 +293,4 @@ tail -f ~/.cloudpull/logs/cloudpull.log
 
 ## Support
 
-- GitHub Issues: https://github.com/yourusername/cloudpull/issues
-- Documentation: https://cloudpull.dev/docs
-- Discord: https://discord.gg/cloudpull
+- Email: [vatsalsanjay@gmail.com](mailto:vatsalsanjay@gmail.com)
