@@ -1,11 +1,11 @@
 /**
  * State Package - Main entry point
- * 
+ *
  * Features:
  * - Package documentation
  * - Type aliases for common interfaces
  * - Helper functions
- * 
+ *
  * Author: CloudPull Team
  * Update History:
  * - 2025-01-29: Initial implementation
@@ -17,134 +17,134 @@
 package state
 
 import (
-  "context"
-  "fmt"
-  "strings"
-  "time"
+	"context"
+	"fmt"
+	"strings"
+	"time"
 )
 
-// DefaultDatabasePath is the default location for the SQLite database
+// DefaultDatabasePath is the default location for the SQLite database.
 const DefaultDatabasePath = "cloudpull.db"
 
-// DefaultChunkSize is the default size for download chunks (5MB)
+// DefaultChunkSize is the default size for download chunks (5MB).
 const DefaultChunkSize = 5 * 1024 * 1024
 
-// MaxRetryAttempts is the maximum number of retry attempts for failed downloads
+// MaxRetryAttempts is the maximum number of retry attempts for failed downloads.
 const MaxRetryAttempts = 3
 
-// State provides the main interface for state management
+// State provides the main interface for state management.
 type State interface {
-  // Session management
-  CreateSession(ctx context.Context, rootFolderID, rootFolderName, destinationPath string) (*Session, error)
-  GetSession(ctx context.Context, id string) (*Session, error)
-  ResumeSession(ctx context.Context, id string) error
-  
-  // Progress tracking
-  GetSessionStats(ctx context.Context, sessionID string) (*SessionStats, error)
-  UpdateSessionProgress(ctx context.Context, sessionID string, fileCompleted bool, bytesCompleted int64, failed bool) error
-  
-  // File operations
-  GetNextPendingFile(ctx context.Context, sessionID string) (*File, error)
-  MarkFileComplete(ctx context.Context, fileID, sessionID string) error
-  MarkFileFailed(ctx context.Context, fileID, sessionID string, err error) error
-  
-  // Folder operations
-  GetNextPendingFolder(ctx context.Context, sessionID string) (*Folder, error)
-  
-  // Maintenance
-  Close() error
-  HealthCheck(ctx context.Context) error
-  Vacuum(ctx context.Context) error
+	// Session management
+	CreateSession(ctx context.Context, rootFolderID, rootFolderName, destinationPath string) (*Session, error)
+	GetSession(ctx context.Context, id string) (*Session, error)
+	ResumeSession(ctx context.Context, id string) error
+
+	// Progress tracking
+	GetSessionStats(ctx context.Context, sessionID string) (*SessionStats, error)
+	UpdateSessionProgress(ctx context.Context, sessionID string, fileCompleted bool, bytesCompleted int64, failed bool) error
+
+	// File operations
+	GetNextPendingFile(ctx context.Context, sessionID string) (*File, error)
+	MarkFileComplete(ctx context.Context, fileID, sessionID string) error
+	MarkFileFailed(ctx context.Context, fileID, sessionID string, err error) error
+
+	// Folder operations
+	GetNextPendingFolder(ctx context.Context, sessionID string) (*Folder, error)
+
+	// Maintenance
+	Close() error
+	HealthCheck(ctx context.Context) error
+	Vacuum(ctx context.Context) error
 }
 
-// Ensure Manager implements State interface
+// Ensure Manager implements State interface.
 var _ State = (*Manager)(nil)
 
-// New creates a new state manager with default configuration
+// New creates a new state manager with default configuration.
 func New(databasePath string) (State, error) {
-  cfg := DefaultConfig()
-  cfg.Path = databasePath
-  return NewManager(cfg)
+	cfg := DefaultConfig()
+	cfg.Path = databasePath
+	return NewManager(cfg)
 }
 
-// NewWithConfig creates a new state manager with custom configuration
+// NewWithConfig creates a new state manager with custom configuration.
 func NewWithConfig(cfg DBConfig) (State, error) {
-  return NewManager(cfg)
+	return NewManager(cfg)
 }
 
-// IsRetryableError determines if an error should trigger a retry
+// IsRetryableError determines if an error should trigger a retry.
 func IsRetryableError(err error) bool {
-  if err == nil {
-    return false
-  }
-  
-  // TODO: Add more sophisticated error classification
-  // For now, consider most errors retryable except specific ones
-  errStr := err.Error()
-  
-  // Non-retryable errors
-  nonRetryable := []string{
-    "permission denied",
-    "no such file",
-    "disk full",
-    "quota exceeded",
-  }
-  
-  for _, nr := range nonRetryable {
-    if containsIgnoreCase(errStr, nr) {
-      return false
-    }
-  }
-  
-  return true
+	if err == nil {
+		return false
+	}
+
+	// TODO: Add more sophisticated error classification
+	// For now, consider most errors retryable except specific ones
+	errStr := err.Error()
+
+	// Non-retryable errors
+	nonRetryable := []string{
+		"permission denied",
+		"no such file",
+		"disk full",
+		"quota exceeded",
+	}
+
+	for _, nr := range nonRetryable {
+		if containsIgnoreCase(errStr, nr) {
+			return false
+		}
+	}
+
+	return true
 }
 
-// containsIgnoreCase checks if s contains substr ignoring case
+// containsIgnoreCase checks if s contains substr ignoring case.
 func containsIgnoreCase(s, substr string) bool {
-  return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
-// FormatBytes formats bytes into human readable format
+// FormatBytes formats bytes into human readable format.
 func FormatBytes(bytes int64) string {
-  const unit = 1024
-  if bytes < unit {
-    return fmt.Sprintf("%d B", bytes)
-  }
-  
-  div, exp := int64(unit), 0
-  for n := bytes / unit; n >= unit; n /= unit {
-    div *= unit
-    exp++
-  }
-  
-  return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-// FormatDuration formats a duration into human readable format
+// FormatDuration formats a duration into human readable format.
 func FormatDuration(d time.Duration) string {
-  if d < time.Minute {
-    return fmt.Sprintf("%.0f seconds", d.Seconds())
-  }
-  
-  if d < time.Hour {
-    mins := int(d.Minutes())
-    secs := int(d.Seconds()) % 60
-    return fmt.Sprintf("%d minutes %d seconds", mins, secs)
-  }
-  
-  hours := int(d.Hours())
-  mins := int(d.Minutes()) % 60
-  return fmt.Sprintf("%d hours %d minutes", hours, mins)
+	if d < time.Minute {
+		return fmt.Sprintf("%.0f seconds", d.Seconds())
+	}
+
+	if d < time.Hour {
+		mins := int(d.Minutes())
+		secs := int(d.Seconds()) % 60
+		return fmt.Sprintf("%d minutes %d seconds", mins, secs)
+	}
+
+	hours := int(d.Hours())
+	mins := int(d.Minutes()) % 60
+	return fmt.Sprintf("%d hours %d minutes", hours, mins)
 }
 
-// CalculateETA calculates estimated time of arrival based on progress
+// CalculateETA calculates estimated time of arrival based on progress.
 func CalculateETA(bytesCompleted, totalBytes int64, elapsedTime time.Duration) time.Duration {
-  if bytesCompleted == 0 || bytesCompleted >= totalBytes {
-    return 0
-  }
-  
-  rate := float64(bytesCompleted) / elapsedTime.Seconds()
-  remaining := float64(totalBytes - bytesCompleted)
-  
-  return time.Duration(remaining/rate) * time.Second
+	if bytesCompleted == 0 || bytesCompleted >= totalBytes {
+		return 0
+	}
+
+	rate := float64(bytesCompleted) / elapsedTime.Seconds()
+	remaining := float64(totalBytes - bytesCompleted)
+
+	return time.Duration(remaining/rate) * time.Second
 }
