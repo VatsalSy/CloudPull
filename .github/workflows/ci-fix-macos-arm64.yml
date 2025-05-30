@@ -16,12 +16,13 @@ on:
 env:
   GO_VERSION: '1.21'
   GOLANGCI_LINT_VERSION: 'v1.55.2'
-  GOSEC_VERSION: 'v2.20.0'
+  GOSEC_VERSION: 'latest'
 
 jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -64,6 +65,7 @@ jobs:
   security:
     name: Security
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -75,9 +77,9 @@ jobs:
           cache: true
 
       - name: Run Gosec Security Scanner
-        uses: securego/gosec@${{ env.GOSEC_VERSION }}
+        uses: securego/gosec@master
         with:
-          args: '-fmt sarif -out gosec-results.sarif -exclude-generated -timeout 10m ./...'
+          args: '-fmt sarif -out gosec-results.sarif ./...'
 
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@v3
@@ -92,6 +94,7 @@ jobs:
   test:
     name: Test
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -123,18 +126,27 @@ jobs:
   build:
     name: Build
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30  # Add explicit timeout
+    timeout-minutes: 30
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        arch: [amd64, arm64]
-        exclude:
-          - os: windows-latest
+        include:
+          # Native builds (faster)
+          - os: ubuntu-latest
+            arch: amd64
+            native: true
+          - os: ubuntu-latest
             arch: arm64
-          # GitHub Actions doesn't support arm64 runners for macOS
-          # Cross-compilation from x86_64 to arm64 on macOS can be problematic
+            native: false
+          - os: macos-latest
+            arch: amd64
+            native: true
+          # macOS arm64 build on x86_64 runner using cross-compilation
           - os: macos-latest
             arch: arm64
+            native: false
+          - os: windows-latest
+            arch: amd64
+            native: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -148,27 +160,52 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
+      - name: Set build environment
+        id: build-env
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            echo "goos=windows" >> $GITHUB_OUTPUT
+            echo "ext=.exe" >> $GITHUB_OUTPUT
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            echo "goos=darwin" >> $GITHUB_OUTPUT
+            echo "ext=" >> $GITHUB_OUTPUT
+          else
+            echo "goos=linux" >> $GITHUB_OUTPUT
+            echo "ext=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build binary
         env:
-          GOOS: ${{ runner.os == 'Windows' && 'windows' || runner.os == 'macOS' && 'darwin' || 'linux' }}
+          GOOS: ${{ steps.build-env.outputs.goos }}
           GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 1  # Required for sqlite3
         run: |
-          go build -v -o cloudpull-${{ runner.os }}-${{ matrix.arch }}${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/cloudpull
+          # For cross-compilation on macOS, we need to set proper flags
+          if [[ "${{ matrix.os }}" == "macos-latest" && "${{ matrix.arch }}" == "arm64" && "${{ matrix.native }}" == "false" ]]; then
+            # Cross-compile from x86_64 to arm64 on macOS
+            export CC="clang -target arm64-apple-darwin"
+            export CXX="clang++ -target arm64-apple-darwin"
+          fi
+          
+          go build -v -o cloudpull-${{ runner.os }}-${{ matrix.arch }}${{ steps.build-env.outputs.ext }} ./cmd/cloudpull
 
       - name: Test binary
-        if: matrix.arch == 'amd64'  # Only test on amd64 as we can't run arm64 on x86
+        # Only test native builds (can't run arm64 binaries on x86_64)
+        if: matrix.native == true
         run: |
-          ./cloudpull-${{ runner.os }}-${{ matrix.arch }}${{ runner.os == 'Windows' && '.exe' || '' }} --version
+          ./cloudpull-${{ runner.os }}-${{ matrix.arch }}${{ steps.build-env.outputs.ext }} --version
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: cloudpull-${{ runner.os }}-${{ matrix.arch }}
-          path: cloudpull-${{ runner.os }}-${{ matrix.arch }}${{ runner.os == 'Windows' && '.exe' || '' }}
+          path: cloudpull-${{ runner.os }}-${{ matrix.arch }}${{ steps.build-env.outputs.ext }}
 
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [lint, test, build]
     steps:
       - name: Checkout code
@@ -190,6 +227,7 @@ jobs:
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [lint, test]
     steps:
       - name: Checkout code
@@ -210,6 +248,7 @@ jobs:
   check-docs:
     name: Documentation Check
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

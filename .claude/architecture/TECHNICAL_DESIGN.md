@@ -4,7 +4,7 @@
 
 ### Core Components
 
-```
+```text
 ┌─────────────────────────────────────────────────────────┐
 │                   CloudPull Main                         │
 ├─────────────────────────────────────────────────────────┤
@@ -25,6 +25,7 @@
 ## Component Specifications
 
 ### 1. CLI Interface
+
 - **Framework**: Cobra
 - **Commands**:
   - `cloudpull init` - Initialize authentication
@@ -34,6 +35,7 @@
   - `cloudpull config` - Manage configuration
 
 ### 2. Sync Engine
+
 - **Responsibilities**:
   - Orchestrate download operations
   - Manage worker pools
@@ -41,8 +43,10 @@
   - Coordinate state updates
 
 ### 3. State Manager
+
 - **Database**: SQLite
 - **Tables**:
+
   ```sql
   -- Sync sessions
   CREATE TABLE sessions (
@@ -102,6 +106,7 @@
   ```
 
 ### 4. Google Drive Client
+
 - **Features**:
   - OAuth2 authentication
   - Batch API requests
@@ -109,6 +114,7 @@
   - Export format handling for Google Docs
 
 ### 5. Rate Limiter
+
 - **Algorithm**: Token bucket
 - **Configuration**:
   - Requests per second: 10 (default)
@@ -116,6 +122,7 @@
   - Dynamic adjustment based on 429 responses
 
 ### 6. Download Manager
+
 - **Concurrency**: 3-5 parallel downloads
 - **Features**:
   - Chunked downloads for large files
@@ -125,7 +132,7 @@
 
 ## Data Flow
 
-```
+```text
 1. User initiates sync
    ↓
 2. Authenticate with Google Drive
@@ -149,12 +156,14 @@
 ## Performance Considerations
 
 ### Memory Management
+
 - Stream folder listings (don't load all at once)
 - Use pagination (1000 items per page)
 - Implement LRU cache for metadata
 - Buffer pool for file downloads
 
 ### Concurrency Model
+
 ```go
 type WorkerPool struct {
     workers    int
@@ -165,19 +174,21 @@ type WorkerPool struct {
 ```
 
 ### Error Handling Strategy
+
 1. **Transient Errors** (network, rate limit)
    - Exponential backoff with jitter
    - Max 5 retries
-   
+
 2. **Permanent Errors** (permissions, not found)
    - Log and skip
    - Mark in database
-   
+
 3. **Fatal Errors** (out of space, database corruption)
    - Graceful shutdown
    - Preserve state for recovery
 
 ## Security Measures
+
 - Encrypted credential storage
 - Secure token refresh
 - File permission preservation
@@ -185,6 +196,7 @@ type WorkerPool struct {
 - Optional local file encryption
 
 ## Monitoring & Metrics
+
 - Download speed tracking
 - API quota usage monitoring
 - Error rate by type

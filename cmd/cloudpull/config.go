@@ -297,10 +297,16 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("Opening %s in %s...\n", configFile, editor)
+	// Validate editor path to prevent command injection
+	editorPath, err := exec.LookPath(editor)
+	if err != nil {
+		return fmt.Errorf("editor '%s' not found in PATH: %w", editor, err)
+	}
 
-	// Open editor
-	editorCmd := exec.Command(editor, configFile)
+	fmt.Printf("Opening %s in %s...\n", configFile, editorPath)
+
+	// Open editor with validated path
+	editorCmd := exec.Command(editorPath, configFile)
 	editorCmd.Stdin = os.Stdin
 	editorCmd.Stdout = os.Stdout
 	editorCmd.Stderr = os.Stderr

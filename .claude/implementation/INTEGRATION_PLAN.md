@@ -1,11 +1,12 @@
 # CloudPull Integration Plan
 
 ## Overview
+
 This document outlines how all the components integrate to create the complete CloudPull application.
 
 ## Component Integration Map
 
-```
+```text
 ┌─────────────┐     ┌──────────────┐     ┌───────────────┐
 │     CLI     │────▶│ Sync Engine  │────▶│ State Manager │
 └─────────────┘     └──────────────┘     └───────────────┘
@@ -30,26 +31,31 @@ This document outlines how all the components integrate to create the complete C
 - Receive progress events for display
 
 ### 2. Sync Engine → API Client
+
 - Request file listings and metadata
 - Download files with resume support
 - Handle rate limiting transparently
 
 ### 3. Sync Engine → State Manager
+
 - Persist sync progress
 - Query resumable state
 - Update file/folder status
 
 ### 4. API Client → Rate Limiter
+
 - All API calls go through rate limiter
 - Automatic backoff on quota errors
 - Adaptive rate adjustment
 
 ### 5. All Components → Error Handler
+
 - Consistent error handling
 - Retry logic based on error type
 - Logging of errors
 
 ### 6. All Components → Logger
+
 - Structured logging throughout
 - Debug/trace for troubleshooting
 - Performance metrics
@@ -57,7 +63,8 @@ This document outlines how all the components integrate to create the complete C
 ## Data Flow
 
 1. **New Sync**:
-   ```
+
+   ```text
    CLI sync command
    → Create session in database
    → Initialize sync engine
@@ -69,7 +76,8 @@ This document outlines how all the components integrate to create the complete C
    ```
 
 2. **Resume Sync**:
-   ```
+
+   ```text
    CLI resume command
    → Load session from database
    → Query pending files
@@ -79,7 +87,8 @@ This document outlines how all the components integrate to create the complete C
    ```
 
 3. **Error Recovery**:
-   ```
+
+   ```text
    Download error occurs
    → Error handler classifies error
    → Retry with backoff if transient
@@ -89,12 +98,14 @@ This document outlines how all the components integrate to create the complete C
    ```
 
 ## Configuration Flow
+
 - CLI reads config file via Viper
 - Config passed to all components
 - Environment variables override file
 - Runtime flags override everything
 
 ## Testing Integration
+
 1. Unit tests for each component
 2. Integration tests with mock Drive API
 3. End-to-end tests with real API (limited)
@@ -102,6 +113,7 @@ This document outlines how all the components integrate to create the complete C
 5. Chaos tests for error scenarios
 
 ## Deployment Considerations
+
 - Single binary distribution
 - Embedded database schema
 - Auto-migration on startup

@@ -395,7 +395,7 @@ func (fw *FileWriter) Close() error {
 func (fw *FileWriter) openFile() error {
 	// Create directory if needed
 	dir := filepath.Dir(fw.filename)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return err
 	}
 
@@ -420,7 +420,11 @@ func (fw *FileWriter) rotate() error {
 	for i := fw.maxBackups - 1; i > 0; i-- {
 		oldName := fmt.Sprintf("%s.%d", fw.filename, i)
 		newName := fmt.Sprintf("%s.%d", fw.filename, i+1)
-		_ = os.Rename(oldName, newName)
+		// Ignore rename errors for non-existent files
+		if err := os.Rename(oldName, newName); err != nil && !os.IsNotExist(err) {
+			// Log error but continue rotation
+			fmt.Fprintf(os.Stderr, "logger: failed to rotate log file %s to %s: %v\n", oldName, newName, err)
+		}
 	}
 
 	// Rename current file

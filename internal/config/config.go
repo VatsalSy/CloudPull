@@ -121,7 +121,13 @@ func Load(cfgFile ...string) (*Config, error) {
 // Get returns the current configuration.
 func Get() *Config {
 	if config == nil {
-		config, _ = Load("")
+		var err error
+		config, err = Load("")
+		if err != nil {
+			// Return a default config if loading fails
+			config = &Config{}
+			setDefaults(config)
+		}
 	}
 	return config
 }
@@ -130,13 +136,16 @@ func Get() *Config {
 func Save() error {
 	configFile := viper.ConfigFileUsed()
 	if configFile == "" {
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to get home directory: %w", err)
+		}
 		configFile = filepath.Join(home, ".cloudpull", "config.yaml")
 	}
 
 	// Ensure directory exists
 	dir := filepath.Dir(configFile)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -148,10 +157,16 @@ func initViper(cfgFile string) {
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
 	} else {
-		home, _ := os.UserHomeDir()
-		configDir := filepath.Join(home, ".cloudpull")
+		home, err := os.UserHomeDir()
+		if err != nil {
+			// Fall back to current directory
+			configDir := ".cloudpull"
+			viper.AddConfigPath(configDir)
+		} else {
+			configDir := filepath.Join(home, ".cloudpull")
+			viper.AddConfigPath(configDir)
+		}
 
-		viper.AddConfigPath(configDir)
 		viper.SetConfigType("yaml")
 		viper.SetConfigName("config")
 	}
@@ -169,7 +184,10 @@ func initViper(cfgFile string) {
 
 // setViperDefaults sets default values in viper.
 func setViperDefaults() {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "."
+	}
 
 	// Sync defaults
 	viper.SetDefault("sync.default_directory", filepath.Join(home, "CloudPull"))
@@ -236,7 +254,10 @@ func setViperDefaults() {
 
 // setDefaults ensures all config fields have sensible defaults.
 func setDefaults(cfg *Config) {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "."
+	}
 
 	if cfg.Sync.DefaultDirectory == "" {
 		cfg.Sync.DefaultDirectory = filepath.Join(home, "CloudPull")
@@ -297,7 +318,10 @@ func (c *Config) GetBandwidthLimitBytes() int64 {
 func ConfigPath() string {
 	configFile := viper.ConfigFileUsed()
 	if configFile == "" {
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			home = "."
+		}
 		configFile = filepath.Join(home, ".cloudpull", "config.yaml")
 	}
 	return configFile
@@ -305,7 +329,10 @@ func ConfigPath() string {
 
 // DataDir returns the CloudPull data directory.
 func DataDir() string {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ".cloudpull"
+	}
 	return filepath.Join(home, ".cloudpull")
 }
 

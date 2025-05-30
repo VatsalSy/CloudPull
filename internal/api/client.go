@@ -186,7 +186,7 @@ func (dc *DriveClient) DownloadFile(ctx context.Context, fileID string, destPath
 // downloadRegularFile handles downloading of regular (non-Google Workspace) files.
 func (dc *DriveClient) downloadRegularFile(ctx context.Context, fileID string, destPath string, fileSize int64, progressFn func(downloaded, total int64)) error {
 	// Create destination directory
-	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(destPath), 0750); err != nil {
 		return errors.Wrap(err, "failed to create destination directory")
 	}
 
@@ -294,7 +294,7 @@ func (dc *DriveClient) ExportFile(ctx context.Context, fileID string, mimeType s
 	}
 
 	// Create destination directory
-	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(destPath), 0750); err != nil {
 		return errors.Wrap(err, "failed to create destination directory")
 	}
 

@@ -207,7 +207,7 @@ linters:
     - durationcheck  # Duration multiplications
     - errorlint     # Error wrapping
     - exhaustive    # Exhaustive enum switches
-    - copyloopvar   # Loop variable export (replaces exportloopref)
+    - exportloopref # Loop variable export
     - funlen        # Function length
     - gocognit      # Cognitive complexity
     - goconst       # Repeated strings
@@ -217,7 +217,7 @@ linters:
     - godox         # TODO/FIXME comments
     - gofmt         # Go fmt
     - goimports     # Import organization
-    - mnd            # Magic numbers (replaces gomnd)
+    - gomnd         # Magic numbers
     - goprintffuncname  # Printf func names
     - gosec         # Security
     - lll           # Line length
@@ -247,7 +247,7 @@ linters:
     - forbidigo     # Forbidden identifiers
     - gochecknoglobals  # No globals
     - gochecknoinits   # No init functions
-    - err113        # Error variables (replaces goerr113)
+    - goerr113      # Error variables
     - goheader      # File headers
     - gomodguard    # Module guard
     - nlreturn      # New line returns
@@ -268,7 +268,7 @@ issues:
         - funlen
         - gocognit
         - goconst
-        - mnd
+        - gomnd
         - lll
 
     # Exclude example files

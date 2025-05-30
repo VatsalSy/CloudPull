@@ -111,7 +111,7 @@ func NewDownloadManager(
 
 	// Create temp directory
 	tempDir := filepath.Join(config.TempDir, "cloudpull-downloads")
-	if err := os.MkdirAll(tempDir, 0755); err != nil {
+	if err := os.MkdirAll(tempDir, 0750); err != nil {
 		return nil, errors.Wrap(err, "failed to create temp directory")
 	}
 
@@ -306,14 +306,18 @@ func (dm *DownloadManager) DownloadFile(ctx context.Context, file *state.File) e
 	// Verify checksum if enabled
 	if dm.verifyChecksums && file.MD5Checksum.Valid && file.MD5Checksum.String != "" {
 		if err := dm.verifyChecksum(downloadInfo.TempPath, file.MD5Checksum.String); err != nil {
-			os.Remove(downloadInfo.TempPath)
+			if removeErr := os.Remove(downloadInfo.TempPath); removeErr != nil {
+				dm.logger.Error(removeErr, "failed to remove temp file after checksum failure", "path", downloadInfo.TempPath)
+			}
 			return errors.Wrap(err, "checksum verification failed")
 		}
 	}
 
 	// Move to final destination
 	if err := dm.moveToFinal(downloadInfo.TempPath, downloadInfo.FinalPath); err != nil {
-		os.Remove(downloadInfo.TempPath)
+		if removeErr := os.Remove(downloadInfo.TempPath); removeErr != nil {
+			dm.logger.Error(removeErr, "failed to remove temp file after move failure", "path", downloadInfo.TempPath)
+		}
 		return errors.Wrap(err, "failed to move file to final destination")
 	}
 
@@ -413,7 +417,7 @@ func (dm *DownloadManager) downloadWithResume(
 	progressFn func(downloaded, total int64),
 ) error {
 	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(destPath), 0750); err != nil {
 		return errors.Wrap(err, "failed to create directory")
 	}
 
@@ -516,7 +520,7 @@ func (dm *DownloadManager) verifyChecksum(filePath string, expectedMD5 string) e
 // moveToFinal moves file from temp to final location atomically.
 func (dm *DownloadManager) moveToFinal(tempPath, finalPath string) error {
 	// Ensure destination directory exists
-	if err := os.MkdirAll(filepath.Dir(finalPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(finalPath), 0750); err != nil {
 		return errors.Wrap(err, "failed to create destination directory")
 	}
 
@@ -536,15 +540,23 @@ func (dm *DownloadManager) moveToFinal(tempPath, finalPath string) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to create destination file")
 	}
-	defer dst.Close()
+	defer func() {
+		if err := dst.Close(); err != nil {
+			dm.logger.Error(err, "failed to close destination file", "path", finalPath)
+		}
+	}()
 
 	if _, err := io.Copy(dst, src); err != nil {
-		os.Remove(finalPath)
+		if removeErr := os.Remove(finalPath); removeErr != nil {
+			dm.logger.Error(removeErr, "failed to remove partial file after copy failure", "path", finalPath)
+		}
 		return errors.Wrap(err, "failed to copy file")
 	}
 
 	// Remove temp file
-	os.Remove(tempPath)
+	if err := os.Remove(tempPath); err != nil {
+		dm.logger.Error(err, "failed to remove temp file after successful move", "path", tempPath)
+	}
 
 	return nil
 }
@@ -602,7 +614,9 @@ func (dm *DownloadManager) cleanupTempFiles() error {
 		if info, ok := value.(*DownloadInfo); ok {
 			if _, err := os.Stat(info.TempPath); err == nil {
 				dm.logger.Debug("Removing temp file", "path", info.TempPath)
-				os.Remove(info.TempPath)
+				if err := os.Remove(info.TempPath); err != nil {
+					dm.logger.Error(err, "failed to remove temp file during cleanup", "path", info.TempPath)
+				}
 			}
 		}
 		return true
@@ -611,7 +625,7 @@ func (dm *DownloadManager) cleanupTempFiles() error {
 	// Then, clean up all files in temp directory from previous runs
 	if dm.tempDir != "" {
 		// Create temp directory if it doesn't exist
-		if err := os.MkdirAll(dm.tempDir, 0755); err != nil {
+		if err := os.MkdirAll(dm.tempDir, 0750); err != nil {
 			return errors.Wrap(err, "failed to create temp directory")
 		}
 		

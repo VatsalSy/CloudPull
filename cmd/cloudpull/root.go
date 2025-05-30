@@ -75,7 +75,7 @@ func initConfig() {
 
 		// Create config directory if it doesn't exist
 		if _, err := os.Stat(configDir); os.IsNotExist(err) {
-			os.MkdirAll(configDir, 0755)
+			os.MkdirAll(configDir, 0750)
 		}
 	}
 
