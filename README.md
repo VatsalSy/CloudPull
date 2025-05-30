@@ -208,6 +208,15 @@ CloudPull is built with a modular architecture:
 - **Progress Tracker**: Real-time progress monitoring
 - **Error Handler**: Intelligent retry and recovery
 
+### Key Design Decisions
+
+1. **Resumable Downloads**: Each file's download progress is tracked in SQLite, allowing byte-level resume capability
+2. **Worker Pool Pattern**: Concurrent downloads are managed through a priority queue and worker pool for optimal performance
+3. **Temporary File Management**: Downloads use a `cloudpull-downloads/` temp directory with automatic cleanup
+4. **BFS Folder Traversal**: Breadth-first search ensures shallow files are prioritized over deeply nested ones
+5. **Checksum Verification**: MD5 checksums are verified post-download to ensure data integrity
+6. **Graceful Shutdown**: Context-based cancellation ensures clean shutdown and state persistence
+
 ## Development
 
 ### Prerequisites
@@ -245,8 +254,20 @@ cloudpull/
 │   └── sync/         # Sync engine
 ├── pkg/              # Public packages
 │   └── progress/     # Progress tracking
-└── tests/            # Test suites
+├── tests/            # Test suites
+├── .claude/          # Development history and AI context
+└── docs/             # Additional documentation
 ```
+
+### Development History
+
+This project was built with the assistance of Claude AI. The `.claude/` directory contains:
+- Development conversations and decision history
+- Architecture discussions and design choices
+- Problem-solving approaches and iterations
+- Implementation notes and rationale
+
+These files serve as a development log and can help future contributors understand the thought process behind various design decisions.
 
 ## Troubleshooting
 
