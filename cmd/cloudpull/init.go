@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
@@ -13,6 +14,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/VatsalSy/CloudPull/internal/app"
+	"github.com/VatsalSy/CloudPull/internal/config"
 )
 
 var initCmd = &cobra.Command{
@@ -100,10 +102,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	var config struct {
 		DefaultSyncDir  string
-		MaxConcurrent   int
-		ChunkSize       int
+		MaxConcurrent   string
+		ChunkSize       string
 		EnableBandwidth bool
-		BandwidthLimit  int
+		BandwidthLimit  string
 	}
 
 	questions := []*survey.Question{
@@ -147,19 +149,46 @@ func runInit(cmd *cobra.Command, args []string) error {
 			Message: "Bandwidth limit (MB/s):",
 			Default: "10",
 		}
-		survey.AskOne(bandwidthPrompt, &config.BandwidthLimit)
+		if err := survey.AskOne(bandwidthPrompt, &config.BandwidthLimit); err != nil {
+			return err
+		}
 	}
 
 	// Step 3: Save configuration
 	fmt.Println(color.YellowString("\n💾 Step 3: Saving Configuration"))
 
+	// Parse numeric values
+	maxConcurrent, err := strconv.Atoi(config.MaxConcurrent)
+	if err != nil {
+		return fmt.Errorf("invalid max concurrent value: %w", err)
+	}
+
+	var bandwidthLimit int
+	if config.EnableBandwidth {
+		bandwidthLimit, err = strconv.Atoi(config.BandwidthLimit)
+		if err != nil {
+			return fmt.Errorf("invalid bandwidth limit value: %w", err)
+		}
+	}
+
+	// Parse chunk size to bytes
+	tempConfig := &config.Config{
+		Sync: config.SyncConfig{
+			ChunkSize: config.ChunkSize,
+		},
+	}
+	chunkSizeBytes, err := tempConfig.GetChunkSizeBytes()
+	if err != nil {
+		return fmt.Errorf("invalid chunk size: %w", err)
+	}
+
 	viper.Set("credentials_file", credentialsFile)
 	viper.Set("sync.default_directory", config.DefaultSyncDir)
-	viper.Set("sync.max_concurrent", config.MaxConcurrent)
+	viper.Set("sync.max_concurrent", maxConcurrent)
 	viper.Set("sync.chunk_size", config.ChunkSize)
-	viper.Set("sync.chunk_size_bytes", int64(config.ChunkSize)*1024*1024) // Convert MB to bytes
+	viper.Set("sync.chunk_size_bytes", chunkSizeBytes)
 	if config.EnableBandwidth {
-		viper.Set("sync.bandwidth_limit", config.BandwidthLimit)
+		viper.Set("sync.bandwidth_limit", bandwidthLimit)
 	}
 
 	configDir := filepath.Dir(configPath)

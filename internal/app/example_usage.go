@@ -95,8 +95,25 @@ func Example() {
 	}
 }
 
+// formatBytes converts bytes to human-readable format.
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
 // ExampleResumeSession shows how to resume a session.
 func ExampleResumeSession() {
+	// NOTE: Error handling below uses log.Fatal for simplicity in this example.
+	// Production code should implement more robust error handling strategies
+	// such as returning errors to the caller, graceful degradation, or retry logic.
 	app, _ := New()
 	app.Initialize()
 	app.InitializeAuth()

@@ -4,10 +4,10 @@
 run:
   # Timeout for analysis
   timeout: 5m
-  
+
   # Include test files
   tests: true
-  
+
   # Skip directories and files using issues configuration instead
 
 # Output configuration
@@ -15,10 +15,10 @@ output:
   # Format of output
   formats:
     - format: colored-line-number
-  
+
   # Print lines of code with issue
   print-issued-lines: true
-  
+
   # Print linter name in the end of issue text
   print-linter-name: true
 
@@ -28,10 +28,10 @@ linters-settings:
   errcheck:
     # Report about not checking of errors in type assertions
     check-type-assertions: true
-    
+
     # Report about assignment of errors to blank identifier
     check-blank: true
-    
+
     # Exclude certain functions
     exclude-functions:
       - io/ioutil.ReadFile
@@ -42,7 +42,7 @@ linters-settings:
   govet:
     # Enable all analyzers
     enable-all: true
-    
+
     # Settings per analyzer
     settings:
       printf:
@@ -177,11 +177,11 @@ linters-settings:
   gosec:
     # Exclude certain rules
     excludes:
-      - G204 # Subprocess launched with variable
-      - G304 # File path provided as taint input
+      - G204  # Subprocess launched with variable
+      - G304  # File path provided as taint input
     # Configure rules
     config:
-      G306: "0600" # Expect file permissions
+      G306: "0600"  # Expect file permissions
 
   # Duplication
   dupl:
@@ -199,12 +199,12 @@ linters:
     - staticcheck   # Static analysis
     - typecheck     # Type checking
     - unused        # Unused code
-    
+
     # Additional linters
     - bodyclose     # HTTP response body closure
     - cyclop        # Cyclomatic complexity
     - dupl          # Code duplication
-    - durationcheck # Duration multiplications
+    - durationcheck  # Duration multiplications
     - errorlint     # Error wrapping
     - exhaustive    # Exhaustive enum switches
     - copyloopvar   # Loop variable export (replaces exportloopref)
@@ -217,8 +217,8 @@ linters:
     - godox         # TODO/FIXME comments
     - gofmt         # Go fmt
     - goimports     # Import organization
-    - mnd           # Magic numbers (replaces gomnd)
-    - goprintffuncname # Printf func names
+    - mnd            # Magic numbers (replaces gomnd)
+    - goprintffuncname  # Printf func names
     - gosec         # Security
     - lll           # Line length
     - misspell      # Spelling
@@ -231,7 +231,7 @@ linters:
     - predeclared   # Shadowing predeclared
     - revive        # Configurable linter
     - rowserrcheck  # SQL rows.Err()
-    - sqlclosecheck # SQL close checking
+    - sqlclosecheck  # SQL close checking
     - stylecheck    # Style checker
     - thelper       # Test helpers
     - tparallel     # Parallel tests
@@ -245,7 +245,7 @@ linters:
     - depguard      # Dependencies guard
     - exhaustruct   # Exhaustive structs
     - forbidigo     # Forbidden identifiers
-    - gochecknoglobals # No globals
+    - gochecknoglobals  # No globals
     - gochecknoinits   # No init functions
     - err113        # Error variables (replaces goerr113)
     - goheader      # File headers
@@ -258,7 +258,7 @@ linters:
 issues:
   # Make issues output unique by line
   uniq-by-line: true
-  
+
   # Exclude certain issues
   exclude-rules:
     # Exclude test files from certain linters
@@ -300,7 +300,7 @@ issues:
     - testdata
     - examples
     - build
-  
+
   # Exclude generated files
   exclude-files:
     - ".*\\.pb\\.go$"

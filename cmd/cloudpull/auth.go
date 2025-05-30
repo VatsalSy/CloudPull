@@ -57,13 +57,24 @@ func runAuth(cmd *cobra.Command, args []string) error {
 	// Handle revoke
 	if revokeAuth {
 		fmt.Println(color.YellowString("🔐 Revoking authentication..."))
-		// TODO: Implement revoke in auth manager
-		fmt.Println(color.RedString("❌ Revoke not implemented yet"))
+		if err := application.RevokeAuth(ctx); err != nil {
+			return fmt.Errorf("failed to revoke authentication: %w", err)
+		}
+		fmt.Println(color.GreenString("✅ Authentication revoked successfully!"))
 		return nil
 	}
 
 	// Check current auth status
-	// TODO: Check if already authenticated
+	if application.IsAuthenticated() {
+		if !forceAuth {
+			fmt.Println(color.GreenString("✅ Already authenticated!"))
+			fmt.Println()
+			fmt.Println("You can start syncing with 'cloudpull sync'")
+			fmt.Println("Use --force to re-authenticate")
+			return nil
+		}
+		fmt.Println(color.YellowString("⚠️  Force re-authentication requested"))
+	}
 
 	// Perform authentication
 	fmt.Println(color.CyanString("🔐 CloudPull Authentication"))

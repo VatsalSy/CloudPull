@@ -62,7 +62,7 @@ err = engine.ResumeSync(ctx, sessionID)
 ## Features
 
 ### Memory Efficiency
-- Streams folder contents without loading entire tree
+- Streams folder contents without loading the entire tree
 - Pagination prevents memory overflow
 - Batch processing for database operations
 

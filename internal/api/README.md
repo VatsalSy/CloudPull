@@ -5,12 +5,14 @@ This package provides a production-ready Google Drive API integration for CloudP
 ## Components
 
 ### 1. Authentication (`auth.go`)
+
 - OAuth2 authentication flow
 - Automatic token refresh
 - Secure token storage
 - Browser-based authentication
 
 ### 2. Drive Client (`client.go`)
+
 - High-level API wrapper
 - Resumable downloads with byte ranges
 - Google Workspace file export
@@ -18,6 +20,7 @@ This package provides a production-ready Google Drive API integration for CloudP
 - Progress tracking
 
 ### 3. Rate Limiter (`ratelimiter.go`)
+
 - Token bucket algorithm
 - Adaptive rate limiting
 - Per-operation limits
@@ -25,6 +28,7 @@ This package provides a production-ready Google Drive API integration for CloudP
 - Metrics collection
 
 ### 4. Batch Operations (`batch.go`)
+
 - Efficient batch processing
 - Parallel downloads
 - Metadata fetching

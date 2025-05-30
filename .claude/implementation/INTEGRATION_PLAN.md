@@ -24,6 +24,7 @@ This document outlines how all the components integrate to create the complete C
 ## Integration Points
 
 ### 1. CLI → Sync Engine
+
 - CLI commands invoke sync engine methods
 - Pass configuration and command options
 - Receive progress events for display

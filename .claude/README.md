@@ -1,12 +1,13 @@
 # CloudPull Development History
 
-This directory contains the development history and context for CloudPull, which was built with the assistance of Claude AI.
+This directory contains the development history and context for CloudPull,
+which was built with the assistance of Claude AI.
 
 ## What's in this directory
 
 - **Development Conversations**: Transcripts of development sessions showing how features were implemented
 - **Architecture Decisions**: Discussions about design choices and trade-offs
-- **Problem Solving**: How various bugs and issues were diagnosed and resolved
+- **Problem-Solving**: How various bugs and issues were diagnosed and resolved
 - **Feature Evolution**: How features evolved from initial concept to implementation
 
 ## Key Development Milestones
@@ -28,6 +29,7 @@ This directory contains the development history and context for CloudPull, which
 ## Future Development
 
 Contributors can refer to these files to understand:
+
 - Why certain patterns were chosen
 - How to extend functionality consistently
 - Common pitfalls and their solutions

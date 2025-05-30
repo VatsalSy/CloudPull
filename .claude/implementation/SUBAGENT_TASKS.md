@@ -4,9 +4,11 @@
 This document outlines specific tasks that can be assigned to sub-agents for parallel development of CloudPull components.
 
 ## Sub-agent 1: Database and State Management
+
 **Focus**: Build the complete state management system using SQLite
 
 ### Tasks:
+
 1. Implement `internal/state/database.go` with connection pooling
 2. Create migration system for schema updates
 3. Build CRUD operations for sessions, folders, and files
@@ -58,7 +60,7 @@ This document outlines specific tasks that can be assigned to sub-agents for par
 - Performance optimizations
 
 ## Sub-agent 4: CLI and Configuration
-**Focus**: Create user-friendly CLI interface and configuration system
+**Focus**: Create user-friendly CLI and configuration system
 
 ### Tasks:
 1. Implement Cobra-based CLI with commands:

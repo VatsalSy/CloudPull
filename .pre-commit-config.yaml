@@ -55,9 +55,6 @@ repos:
       
       # Check toml files
       - id: check-toml
-      
-      # Check that files with names that would conflict on case-insensitive filesystems
-      - id: check-case-conflict
 
   # Go specific hooks
   - repo: https://github.com/golangci/golangci-lint

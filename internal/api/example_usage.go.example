@@ -82,7 +82,12 @@ func ExampleUsage() error {
     firstFile := files[0]
     
     if !firstFile.IsFolder {
-      destPath := filepath.Join("/tmp/downloads", firstFile.Name)
+      downloadDir := "/tmp/downloads"
+      if err := os.MkdirAll(downloadDir, 0755); err != nil {
+        fmt.Printf("Failed to create download directory: %v\n", err)
+        return
+      }
+      destPath := filepath.Join(downloadDir, firstFile.Name)
       
       err = driveClient.DownloadFile(ctx, firstFile.ID, destPath, func(downloaded, total int64) {
         if total > 0 {
@@ -137,6 +142,12 @@ func ExampleUsage() error {
   }
   
   if len(downloadTasks) > 0 {
+    // Create batch download directory
+    if err := os.MkdirAll("/tmp/batch_downloads", 0755); err != nil {
+      fmt.Printf("Failed to create batch download directory: %v\n", err)
+      return
+    }
+    
     batchDownloader := NewBatchDownloader(driveClient, log, 3)
     results, err := batchDownloader.DownloadFiles(ctx, downloadTasks, func(completed, total int) {
       fmt.Printf("\rBatch progress: %d/%d files", completed, total)
@@ -162,7 +173,12 @@ func ExampleUsage() error {
     if file.CanExport {
       fmt.Printf("Exporting %s as %s\n", file.Name, file.ExportFormat)
       
-      destPath := filepath.Join("/tmp/exports", file.Name)
+      exportDir := "/tmp/exports"
+      if err := os.MkdirAll(exportDir, 0755); err != nil {
+        fmt.Printf("Failed to create export directory: %v\n", err)
+        continue
+      }
+      destPath := filepath.Join(exportDir, file.Name)
       err = driveClient.ExportFile(ctx, file.ID, file.ExportFormat, destPath, func(downloaded, total int64) {
         fmt.Printf("\rExporting: %d bytes", downloaded)
       })

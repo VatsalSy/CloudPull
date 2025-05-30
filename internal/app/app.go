@@ -270,6 +270,31 @@ func (app *App) Authenticate(ctx context.Context) error {
 	return nil
 }
 
+// RevokeAuth revokes the current authentication.
+func (app *App) RevokeAuth(ctx context.Context) error {
+	if app.authManager == nil {
+		if err := app.InitializeAuth(); err != nil {
+			return err
+		}
+	}
+
+	// Revoke the token
+	if err := app.authManager.RevokeToken(ctx); err != nil {
+		return errors.Wrap(err, "failed to revoke authentication")
+	}
+
+	app.logger.Info("Authentication revoked successfully")
+	return nil
+}
+
+// IsAuthenticated checks if the user is already authenticated.
+func (app *App) IsAuthenticated() bool {
+	if app.authManager == nil {
+		return false
+	}
+	return app.authManager.IsAuthenticated()
+}
+
 // StartSync starts a new sync session.
 func (app *App) StartSync(ctx context.Context, folderID, outputDir string, options *SyncOptions) error {
 	if err := app.ensureReady(); err != nil {
