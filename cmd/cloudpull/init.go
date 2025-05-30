@@ -14,7 +14,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/VatsalSy/CloudPull/internal/app"
-	"github.com/VatsalSy/CloudPull/internal/config"
 )
 
 var initCmd = &cobra.Command{
@@ -172,15 +171,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Parse chunk size to bytes
-	tempConfig := &config.Config{
-		Sync: config.SyncConfig{
-			ChunkSize: config.ChunkSize,
-		},
-	}
-	chunkSizeBytes, err := tempConfig.GetChunkSizeBytes()
-	if err != nil {
-		return fmt.Errorf("invalid chunk size: %w", err)
-	}
+	chunkSizeBytes := parseChunkSize(config.ChunkSize)
 
 	viper.Set("credentials_file", credentialsFile)
 	viper.Set("sync.default_directory", config.DefaultSyncDir)
