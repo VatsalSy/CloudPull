@@ -156,7 +156,7 @@ func TestAuthManager(t *testing.T) {
 
 	t.Run("token management", func(t *testing.T) {
 		logger := newMockLogger()
-		tokenPath := "/tmp/cloudpull_test_token.json"
+		tokenPath := filepath.Join(t.TempDir(), "cloudpull_test_token.json")
 		defer os.Remove(tokenPath)
 
 		am, err := NewAuthManager(credPath, tokenPath, logger)

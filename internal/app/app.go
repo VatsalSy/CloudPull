@@ -19,11 +19,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/spf13/viper"
@@ -527,7 +525,7 @@ func (app *App) Stop() error {
 func (app *App) initializeDatabase(dbPath string) error {
 	// Ensure directory exists
 	dbDir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dbDir, 0755); err != nil {
+	if err := os.MkdirAll(dbDir, 0750); err != nil {
 		return errors.Wrap(err, "failed to create data directory")
 	}
 
@@ -568,7 +566,7 @@ func (app *App) ensureReady() error {
 
 func (app *App) handleSignals(cancel context.CancelFunc) {
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	app.setupSignalHandling(sigChan)
 
 	select {
 	case sig := <-sigChan:

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"runtime"
 	"strings"
@@ -461,6 +462,24 @@ type SyncSession struct {
 	Canceled   bool
 }
 
+// safeUint64ToInt safely converts uint64 to int, capping at MaxInt.
+func safeUint64ToInt(n uint64) int {
+	if n > math.MaxInt {
+		return math.MaxInt
+	}
+	return int(n)
+}
+
+func safeInt64ToInt(n int64) int {
+	if n > math.MaxInt {
+		return math.MaxInt
+	}
+	if n < math.MinInt {
+		return math.MinInt
+	}
+	return int(n)
+}
+
 // getOrCreateApp returns a shared app instance.
 func getOrCreateApp() (*app.App, error) {
 	application, err := app.New()
@@ -502,8 +521,8 @@ func convertToActiveSession(session *state.Session) ActiveSession {
 		StartTime:       session.StartTime,
 		Source:          source,
 		Destination:     session.DestinationPath,
-		TotalFiles:      int(session.TotalFiles),
-		CompletedFiles:  int(session.CompletedFiles),
+		TotalFiles:      safeInt64ToInt(session.TotalFiles),
+		CompletedFiles:  safeInt64ToInt(session.CompletedFiles),
 		TotalBytes:      session.TotalBytes,
 		DownloadedBytes: session.CompletedBytes,
 		Speed:           speed,
@@ -525,7 +544,7 @@ func convertToSyncSession(session *state.Session) SyncSession {
 		StartTime:  session.StartTime,
 		EndTime:    endTime,
 		Duration:   endTime.Sub(session.StartTime),
-		TotalFiles: int(session.TotalFiles),
+		TotalFiles: safeInt64ToInt(session.TotalFiles),
 		TotalBytes: session.TotalBytes,
 		Failed:     session.Status == state.SessionStatusFailed,
 		Canceled:   session.Status == state.SessionStatusCancelled,
