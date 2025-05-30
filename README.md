@@ -210,7 +210,7 @@ CloudPull is built with a modular architecture:
 
 ### Architecture Overview
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                         CLI Layer                             │
 │  (cmd/cloudpull/*)                                           │
@@ -305,7 +305,7 @@ make coverage
 
 ### Project Structure
 
-```
+```text
 cloudpull/
 ├── cmd/cloudpull/     # CLI commands
 ├── internal/          # Private packages
@@ -327,12 +327,14 @@ cloudpull/
 ### Development History
 
 This project was built with the assistance of Claude AI. The `.claude/` directory contains:
+
 - Development conversations and decision history
 - Architecture discussions and design choices
 - Problem-solving approaches and iterations
 - Implementation notes and rationale
 
-These files serve as a development log and can help future contributors understand the thought process behind various design decisions.
+These files serve as a development log and can help future contributors understand the thought process
+behind various design decisions.
 
 ## Troubleshooting
 
@@ -353,7 +355,7 @@ make build
 
 ### Common Issues
 
-1. **"command not found: go"** - Install Go 1.21+ from https://golang.org/dl/
+1. **"command not found: go"** - Install Go 1.21+ from <https://golang.org/dl/>
 2. **Permission errors** - Ensure you have write access to the destination directory
 3. **Authentication fails** - Delete `~/.cloudpull/token.json` and re-authenticate
 4. **Rate limit errors** - CloudPull automatically handles these, but you can reduce concurrent downloads
@@ -367,10 +369,12 @@ A: Open the folder in Google Drive web interface. The ID is in the URL: `https:/
 A: Yes, run multiple sync commands with different folder IDs and destinations.
 
 **Q: Does CloudPull support two-way sync?**
-A: Currently, CloudPull only supports one-way sync (Drive → Local). Two-way sync is planned for future releases.
+A: Currently, CloudPull only supports one-way sync (Drive → Local). Two-way sync is planned for future
+releases.
 
 **Q: How does resume work?**
-A: CloudPull stores sync state in a local SQLite database. It tracks each file's download progress and can resume from the exact byte offset.
+A: CloudPull stores sync state in a local SQLite database. It tracks each file's download progress and can
+resume from the exact byte offset.
 
 ## Contributing
 

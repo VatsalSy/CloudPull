@@ -22,9 +22,9 @@ Fixes #(issue number)
 
 <!-- List the specific changes made in this PR -->
 
-- 
-- 
-- 
+-
+-
+-
 
 ## Testing
 
@@ -36,8 +36,8 @@ Fixes #(issue number)
 
 ### Test Configuration
 
-- **Go version**: 
-- **Operating System**: 
+- **Go version**:
+- **Operating System**:
 
 ## Checklist
 

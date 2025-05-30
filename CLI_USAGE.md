@@ -250,11 +250,13 @@ cloudpull completion powershell > cloudpull.ps1
 ### Common Issues
 
 1. **Authentication Failed**
+
    ```bash
    cloudpull init --credentials-file /path/to/new/credentials.json
    ```
 
 2. **Resume Not Working**
+
    ```bash
    # List all sessions
    cloudpull resume
@@ -264,6 +266,7 @@ cloudpull completion powershell > cloudpull.ps1
    ```
 
 3. **Slow Downloads**
+
    ```bash
    # Increase concurrent downloads
    cloudpull config set sync.max_concurrent 5

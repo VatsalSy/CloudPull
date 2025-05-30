@@ -1,6 +1,7 @@
 # CloudPull Error Handling System
 
-A comprehensive error handling and retry system designed for cloud synchronization operations, providing structured error types, configurable retry policies, and integrated logging.
+A comprehensive error handling and retry system designed for cloud synchronization operations, providing
+structured error types, configurable retry policies, and integrated logging.
 
 ## Features
 

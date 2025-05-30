@@ -447,6 +447,7 @@ func getMemoryStats() (used, total int64) {
 	// For now, return placeholder values
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
+	// #nosec G115 - memory values are always positive and within int64 range
 	return int64(m.Alloc), int64(m.Sys)
 }
 

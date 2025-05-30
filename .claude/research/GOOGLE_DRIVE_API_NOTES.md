@@ -3,12 +3,14 @@
 ## API Quotas and Limits
 
 ### Per-User Limits
+
 - **Queries per 100 seconds**: 1,000
 - **Queries per 100 seconds per user**: 1,000
 - **Upload bandwidth per user**: 750 GB/day
 - **Download bandwidth**: Unlimited (but subject to rate limiting)
 
 ### Best Practices for Quota Management
+
 1. Use exponential backoff (2^n * 1000ms + random_ms)
 2. Batch requests when possible (max 100 per batch)
 3. Use fields parameter to limit response size
@@ -17,7 +19,8 @@
 ## Key API Endpoints
 
 ### 1. Files List
-```
+
+```http
 GET https://www.googleapis.com/drive/v3/files
 Parameters:
 - q: Query string (e.g., "'folder-id' in parents")
@@ -28,21 +31,24 @@ Parameters:
 ```
 
 ### 2. Files Get (Metadata)
-```
+
+```http
 GET https://www.googleapis.com/drive/v3/files/{fileId}
 Parameters:
 - fields: Specify fields (id,name,size,md5Checksum,mimeType,modifiedTime)
 ```
 
 ### 3. Files Download
-```
+
+```http
 GET https://www.googleapis.com/drive/v3/files/{fileId}?alt=media
 Headers:
 - Range: bytes=start-end (for resumable downloads)
 ```
 
 ### 4. Files Export (Google Docs)
-```
+
+```http
 GET https://www.googleapis.com/drive/v3/files/{fileId}/export
 Parameters:
 - mimeType: Target format
@@ -51,6 +57,7 @@ Parameters:
 ## Special Considerations
 
 ### Google Workspace Files
+
 These files don't have binary content and must be exported:
 
 | Source Type | Recommended Export | Size Limit |
@@ -61,6 +68,7 @@ These files don't have binary content and must be exported:
 | Google Drawings | application/pdf or .png | 10 MB |
 
 ### File Types and MIME Types
+
 ```go
 var GoogleMimeTypes = map[string]string{
     "application/vnd.google-apps.document":     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -71,12 +79,14 @@ var GoogleMimeTypes = map[string]string{
 ```
 
 ### Handling Large Downloads
+
 1. Use `Range` header for chunked downloads
 2. Store download progress in database
 3. Implement retry logic for failed chunks
 4. Verify with MD5 checksum after completion
 
 ### Rate Limit Response
+
 ```json
 {
   "error": {
@@ -96,6 +106,7 @@ var GoogleMimeTypes = map[string]string{
 ### Optimization Techniques
 
 1. **Batch Requests**
+
 ```go
 batch := drive.NewBatchRequest()
 for _, fileId := range fileIds {
@@ -106,20 +117,25 @@ batch.Do()
 ```
 
 2. **Partial Response**
+
 Always use `fields` parameter:
-```
+
+```http
 fields=files(id,name,size,md5Checksum,mimeType,parents,modifiedTime)
 ```
 
 3. **Change Detection**
+
 Use `modifiedTime` and `md5Checksum` to skip unchanged files
 
 ## Authentication Flow
 
 ### OAuth2 Scopes Required
+
 - `https://www.googleapis.com/auth/drive.readonly` - Read-only access
 
 ### Token Storage
+
 - Store refresh token securely
 - Implement automatic token refresh
 - Handle token expiration gracefully

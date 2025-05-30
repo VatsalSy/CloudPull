@@ -1,6 +1,7 @@
 # CloudPull Sync Engine
 
 ## Overview
+
 The sync engine is the heart of CloudPull, orchestrating the synchronization of Google Drive folders to local storage.
 
 ## Architecture
@@ -62,23 +63,27 @@ err = engine.ResumeSync(ctx, sessionID)
 ## Features
 
 ### Memory Efficiency
+
 - Streams folder contents without loading the entire tree
 - Pagination prevents memory overflow
 - Batch processing for database operations
 
 ### Reliability
+
 - Automatic retry with exponential backoff
 - Resume from exact byte offset
 - Checksum verification
 - Atomic file operations
 
 ### Performance
+
 - Concurrent downloads (configurable)
 - Priority queue (smallest files first)
 - Bandwidth throttling
 - Progress batching
 
 ### Monitoring
+
 - Real-time progress events
 - Detailed error logging
 - Performance metrics
@@ -101,6 +106,7 @@ type Config struct {
 ## Error Handling
 
 The sync engine uses the centralized error handler for:
+
 - Network errors: Retry with backoff
 - API quota errors: Longer backoff
 - Permission errors: Skip file
@@ -120,6 +126,7 @@ progressTracker.Subscribe(func(snapshot progress.Snapshot) {
 ```
 
 Event types:
+
 - FileStarted
 - FileProgress
 - FileCompleted

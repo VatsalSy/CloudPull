@@ -11,7 +11,9 @@ assignees: ''
 <!-- A clear and concise description of what the bug is -->
 
 ## To Reproduce
+
 Steps to reproduce the behavior:
+
 1. Run command '...'
 2. With flags '....'
 3. See error
@@ -23,7 +25,8 @@ Steps to reproduce the behavior:
 <!-- What actually happened -->
 
 ## Error messages
-```
+
+```text
 <!-- Paste any error messages here -->
 ```
 
@@ -42,7 +45,8 @@ Steps to reproduce the behavior:
 
 ## Logs
 <!-- If applicable, add logs to help explain your problem -->
-```
+
+```text
 <!-- Paste relevant logs here -->
 ```
 

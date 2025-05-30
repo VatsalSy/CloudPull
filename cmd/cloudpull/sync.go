@@ -317,14 +317,14 @@ func monitorSyncProgress(app *app.App, completionChan <-chan struct{}) {
 
 			// Update progress
 			if bar != nil && progress.CompletedFiles > lastFiles {
-				bar.Set64(progress.CompletedFiles)
+				_ = bar.Set64(progress.CompletedFiles)
 				lastFiles = progress.CompletedFiles
 			}
 
 			// Check if complete via status
 			if progress.Status == "stopped" || progress.Status == "completed" {
 				if bar != nil {
-					bar.Finish()
+					_ = bar.Finish()
 				}
 				return
 			}

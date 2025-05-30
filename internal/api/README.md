@@ -1,6 +1,7 @@
 # Google Drive API Integration
 
-This package provides a production-ready Google Drive API integration for CloudPull with comprehensive error handling, rate limiting, and batch operations support.
+This package provides a production-ready Google Drive API integration for CloudPull with comprehensive error
+handling, rate limiting, and batch operations support.
 
 ## Components
 
@@ -116,6 +117,7 @@ adaptiveRL := api.NewAdaptiveRateLimiter(config)
 ## Error Handling
 
 The client automatically retries on:
+
 - Rate limit errors (429)
 - Server errors (500, 502, 503, 504)
 - Network errors (connection refused, timeout)
@@ -155,11 +157,13 @@ if err != nil {
 ## Testing
 
 Run tests with:
+
 ```bash
 go test ./internal/api -v
 ```
 
 For integration tests, set `GOOGLE_CREDENTIALS_PATH`:
+
 ```bash
 export GOOGLE_CREDENTIALS_PATH=/path/to/credentials.json
 go test ./internal/api -v -tags=integration

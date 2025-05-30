@@ -306,6 +306,7 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Opening %s in %s...\n", configFile, editorPath)
 
 	// Open editor with validated path
+	// #nosec G204 - editor path is validated with exec.LookPath above
 	editorCmd := exec.Command(editorPath, configFile)
 	editorCmd.Stdin = os.Stdin
 	editorCmd.Stdout = os.Stdout
