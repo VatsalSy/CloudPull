@@ -264,9 +264,9 @@ func TestLogRequest(t *testing.T) {
 		level      string
 		statusCode int
 	}{
-		{"Success", 200, "info"},
-		{"ClientError", 400, "error"},
-		{"ServerError", 500, "error"},
+		{name: "Success", level: "info", statusCode: 200},
+		{name: "ClientError", level: "error", statusCode: 400},
+		{name: "ServerError", level: "error", statusCode: 500},
 	}
 
 	for _, tc := range testCases {

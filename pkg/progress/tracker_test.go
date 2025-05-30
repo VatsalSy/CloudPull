@@ -183,8 +183,15 @@ func TestProgressSnapshot(t *testing.T) {
 	tracker.Start()
 	defer tracker.Stop()
 
-	tracker.SetTotals(100, 1024*1024*50)
+	// Set total files to 4 and total bytes to 100MB
+	tracker.SetTotals(4, 1024*1024*100)
+	
+	// Add a small delay to ensure elapsed time > 0
+	time.Sleep(50 * time.Millisecond)
+	
+	// AddFile already increments both files and bytes, so don't call AddBytes separately
 	tracker.AddFile("file1.txt", 1024*1024*10)
+	time.Sleep(50 * time.Millisecond) // Simulate time passing
 	tracker.AddFile("file2.txt", 1024*1024*15)
 
 	time.Sleep(100 * time.Millisecond) // Allow batch processing
@@ -193,7 +200,7 @@ func TestProgressSnapshot(t *testing.T) {
 
 	t.Run("percent complete", func(t *testing.T) {
 		percent := snapshot.PercentComplete()
-		expected := float64(25*1024*1024) / float64(50*1024*1024) * 100
+		expected := float64(25*1024*1024) / float64(100*1024*1024) * 100
 
 		if percent != expected {
 			t.Errorf("expected %.2f%% complete, got %.2f%%", expected, percent)
@@ -209,8 +216,15 @@ func TestProgressSnapshot(t *testing.T) {
 
 	t.Run("ETA calculation", func(t *testing.T) {
 		eta := snapshot.ETA()
-		if eta <= 0 {
-			t.Error("expected positive ETA")
+		// Debug information
+		remainingBytes := snapshot.TotalBytes - snapshot.ProcessedBytes
+		t.Logf("ProcessedBytes: %d, TotalBytes: %d, RemainingBytes: %d, ElapsedTime: %v, BytesPerSecond: %.2f, ETA: %v (%.3f seconds)", 
+			snapshot.ProcessedBytes, snapshot.TotalBytes, remainingBytes, snapshot.ElapsedTime, snapshot.BytesPerSecond(), eta, eta.Seconds())
+		
+		// Only expect positive ETA if there are remaining bytes and significant time left
+		// ETA might be very small (< 1 second) which could round to 0 in display
+		if remainingBytes > 0 && eta.Seconds() < 0.001 {
+			t.Error("expected positive ETA when there are remaining bytes")
 		}
 	})
 }

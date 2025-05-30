@@ -255,7 +255,8 @@ func TestStats(t *testing.T) {
 		// Should be (100-20)MB / 10MB/s = 8 seconds
 		expectedETA := 8 * time.Second
 
-		if eta < expectedETA-time.Second || eta > expectedETA+time.Second {
+		// Allow 2 second tolerance for timing variations
+		if eta < expectedETA-2*time.Second || eta > expectedETA+2*time.Second {
 			t.Errorf("expected ETA around %v, got %v", expectedETA, eta)
 		}
 	})

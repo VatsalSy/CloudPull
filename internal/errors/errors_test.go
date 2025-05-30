@@ -55,14 +55,14 @@ func TestErrorTypes(t *testing.T) {
 		errorType ErrorType
 		retryable bool
 	}{
-		{"Network", ErrorTypeNetwork, true, "Network"},
-		{"APIQuota", ErrorTypeAPIQuota, true, "APIQuota"},
-		{"Permission", ErrorTypePermission, false, "Permission"},
-		{"Storage", ErrorTypeStorage, true, "Storage"},
-		{"Corruption", ErrorTypeCorruption, true, "Corruption"},
-		{"Configuration", ErrorTypeConfiguration, false, "Configuration"},
-		{"Context", ErrorTypeContext, false, "Context"},
-		{"Unknown", ErrorTypeUnknown, false, "Unknown"},
+		{name: "Network", stringRep: "Network", errorType: ErrorTypeNetwork, retryable: true},
+		{name: "APIQuota", stringRep: "APIQuota", errorType: ErrorTypeAPIQuota, retryable: true},
+		{name: "Permission", stringRep: "Permission", errorType: ErrorTypePermission, retryable: false},
+		{name: "Storage", stringRep: "Storage", errorType: ErrorTypeStorage, retryable: true},
+		{name: "Corruption", stringRep: "Corruption", errorType: ErrorTypeCorruption, retryable: true},
+		{name: "Configuration", stringRep: "Configuration", errorType: ErrorTypeConfiguration, retryable: false},
+		{name: "Context", stringRep: "Context", errorType: ErrorTypeContext, retryable: false},
+		{name: "Unknown", stringRep: "Unknown", errorType: ErrorTypeUnknown, retryable: false},
 	}
 
 	for _, tt := range tests {

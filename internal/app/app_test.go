@@ -147,13 +147,13 @@ func TestFormatBytes(t *testing.T) {
 		expected string
 		bytes    int64
 	}{
-		{0, "0 B"},
-		{100, "100 B"},
-		{1024, "1.0 KB"},
-		{1536, "1.5 KB"},
-		{1048576, "1.0 MB"},
-		{1073741824, "1.0 GB"},
-		{1099511627776, "1.0 TB"},
+		{expected: "0 B", bytes: 0},
+		{expected: "100 B", bytes: 100},
+		{expected: "1.0 KB", bytes: 1024},
+		{expected: "1.5 KB", bytes: 1536},
+		{expected: "1.0 MB", bytes: 1048576},
+		{expected: "1.0 GB", bytes: 1073741824},
+		{expected: "1.0 TB", bytes: 1099511627776},
 	}
 
 	for _, tt := range tests {

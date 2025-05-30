@@ -18,6 +18,7 @@ cloudpull
 *.out
 coverage.html
 coverage.txt
+coverage/
 
 # Security reports
 security-report.json
