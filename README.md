@@ -47,6 +47,29 @@ make install
 
 Download the latest release for your platform from the [releases page](https://github.com/VatsalSy/CloudPull/releases).
 
+## OAuth Setup
+
+### Setting up Google Drive API Access
+
+1. **Create a Google Cloud Project**:
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create a new project or select an existing one
+   - Enable the Google Drive API for your project
+
+2. **Create OAuth 2.0 Credentials**:
+   - Go to "APIs & Services" > "Credentials"
+   - Click "Create Credentials" > "OAuth client ID"
+   - Choose "Desktop app" as the application type
+   - Download the credentials JSON file
+
+3. **Configure CloudPull**:
+   - Copy `client_secret.example.json` as a reference
+   - Place your downloaded credentials file in the CloudPull config directory
+   - The file should match the pattern `client_secret*.json`
+   - Default location: `~/.cloudpull/client_secret_*.json`
+
+**Note**: Never commit your actual `client_secret*.json` file to version control. It's already included in `.gitignore`.
+
 ## Quick Start
 
 ### 1. Initialize Authentication

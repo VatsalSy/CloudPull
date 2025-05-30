@@ -64,6 +64,7 @@ temp/
 credentials.json
 token.json
 client_secret*.json
+!client_secret.example.json
 
 # Build artifacts
 dist/
