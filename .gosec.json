@@ -1,0 +1,13 @@
+{
+  "global": {
+    "nosec": "enabled",
+    "audit": "enabled"
+  },
+  "rules": {
+    "G104": {
+      "excludes": [
+        ".*_test\\.go"
+      ]
+    }
+  }
+}

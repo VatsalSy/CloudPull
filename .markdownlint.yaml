@@ -1,0 +1,44 @@
+# Markdownlint configuration
+# https://github.com/markdownlint/markdownlint/blob/master/docs/RULES.md
+
+# Default state for all rules
+default: true
+
+# Path to configuration file to extend
+extends: null
+
+# MD013/line-length - Line length
+MD013:
+  # Number of characters
+  line_length: 120
+  # Number of characters for headings
+  heading_line_length: 80
+  # Number of characters for code blocks
+  code_block_line_length: 120
+  # Include tables
+  tables: true
+  # Include headings
+  headings: true
+  # Strict length checking
+  strict: false
+  # Stern length checking
+  stern: false
+
+# MD033/no-inline-html - Inline HTML
+MD033:
+  # Allowed elements
+  allowed_elements:
+    - br
+    - p
+    - a
+    - img
+    - details
+    - summary
+
+# MD041/first-line-heading - First line in file should be a heading
+MD041: false
+
+# MD024/no-duplicate-heading - Multiple headings with the same content
+MD024:
+  # Only check sibling headings
+  siblings_only: true
