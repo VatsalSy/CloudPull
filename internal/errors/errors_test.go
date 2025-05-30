@@ -393,9 +393,9 @@ func TestAdaptiveBackoff(t *testing.T) {
 		adaptive.RecordSuccess()
 		adaptive.RecordSuccess()
 
-		// Interval should be reduced
+		// Interval should be reduced (0.5 seconds due to adaptation factor of 0.5)
 		interval := adaptive.NextBackOff()
-		assert.True(t, interval < 1*time.Second)
+		assert.True(t, interval <= 500*time.Millisecond, "Expected interval <= 500ms, got %v", interval)
 	})
 
 	t.Run("ErrorAdaptation", func(t *testing.T) {

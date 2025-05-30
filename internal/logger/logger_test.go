@@ -158,10 +158,7 @@ func TestChildLoggers(t *testing.T) {
 
 	t.Run("With", func(t *testing.T) {
 		buf.Reset()
-		child := parent.With(map[string]interface{}{
-			"user_id": "user123",
-			"action":  "upload",
-		})
+		child := parent.With("user_id", "user123", "action", "upload")
 		child.Info("child log")
 
 		var output map[string]interface{}
@@ -433,5 +430,7 @@ func TestPrettyLogging(t *testing.T) {
 	output := buf.String()
 	assert.Contains(t, output, "INF")
 	assert.Contains(t, output, "pretty message")
-	assert.Contains(t, output, "key=value")
+	// Pretty logging adds ANSI color codes, so we check for the value separately
+	assert.Contains(t, output, "key=")
+	assert.Contains(t, output, "value")
 }

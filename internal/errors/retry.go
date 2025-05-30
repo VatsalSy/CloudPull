@@ -274,8 +274,11 @@ func (ab *AdaptiveBackoff) RecordSuccess() {
 		// Reduce current interval
 		newInterval := float64(ab.baseBackoff.currentInterval) *
 			ab.adaptiveConfig.AdaptationFactor
-		if newInterval < float64(ab.baseBackoff.config.InitialInterval) {
-			newInterval = float64(ab.baseBackoff.config.InitialInterval)
+		// Allow interval to go below initial interval for adaptive behavior
+		// but not below a minimum threshold
+		minInterval := float64(ab.baseBackoff.config.InitialInterval) * 0.1
+		if newInterval < minInterval {
+			newInterval = minInterval
 		}
 		ab.baseBackoff.currentInterval = time.Duration(newInterval)
 	}
