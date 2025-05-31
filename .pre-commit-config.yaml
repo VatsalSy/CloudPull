@@ -15,44 +15,33 @@ repos:
       # Trim trailing whitespace
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
-      
       # Ensure files end with newline
       - id: end-of-file-fixer
-      
       # Check yaml files
       - id: check-yaml
         args: [--unsafe]
         exclude: ^(.github/workflows/|kubernetes/)
-      
       # Check json files
       - id: check-json
         exclude: ^(vendor/|testdata/)
-      
       # Check for merge conflicts
       - id: check-merge-conflict
-      
       # Check for files that would conflict on case-insensitive filesystems
       - id: check-case-conflict
-      
       # Check that executables have shebangs
       - id: check-executables-have-shebangs
-      
       # Check that scripts with shebangs are executable
       - id: check-shebang-scripts-are-executable
-      
       # Detect private keys
       - id: detect-private-key
         exclude: ^(testdata/|examples/)
-      
       # Check for large files
       - id: check-added-large-files
         args: [--maxkb=1000]
         exclude: ^(vendor/|testdata/)
-      
       # Fix mixed line endings
       - id: mixed-line-ending
         args: [--fix=lf]
-      
       # Check toml files
       - id: check-toml
 
