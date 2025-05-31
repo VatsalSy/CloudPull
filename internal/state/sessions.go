@@ -155,9 +155,11 @@ func (s *SessionStore) Update(ctx context.Context, session *Session) error {
 
 // UpdateStatus updates the session status
 func (s *SessionStore) UpdateStatus(ctx context.Context, id, status string) error {
-	query := `UPDATE sessions SET status = $1 WHERE id = $2`
+	query := `UPDATE sessions SET status = $1, updated_at = $2 WHERE id = $3 AND updated_at = (
+		SELECT updated_at FROM sessions WHERE id = $3
+	)`
 
-	result, err := s.db.ExecContext(ctx, query, status, id)
+	result, err := s.db.ExecContext(ctx, query, status, time.Now().UTC(), id)
 	if err != nil {
 		return fmt.Errorf("failed to update session status: %w", err)
 	}
@@ -168,7 +170,7 @@ func (s *SessionStore) UpdateStatus(ctx context.Context, id, status string) erro
 	}
 
 	if rows == 0 {
-		return fmt.Errorf("session not found: %s", id)
+		return fmt.Errorf("session not found or concurrent update detected: %s", id)
 	}
 
 	return nil
@@ -183,8 +185,9 @@ func (s *SessionStore) UpdateProgress(ctx context.Context, id string, delta Sess
       failed_files = failed_files + $3,
       skipped_files = skipped_files + $4,
       total_bytes = total_bytes + $5,
-      completed_bytes = completed_bytes + $6
-    WHERE id = $7`
+      completed_bytes = completed_bytes + $6,
+      updated_at = $7
+    WHERE id = $8`
 
 	result, err := s.db.ExecContext(ctx, query,
 		delta.TotalFiles,
@@ -193,6 +196,7 @@ func (s *SessionStore) UpdateProgress(ctx context.Context, id string, delta Sess
 		delta.SkippedFiles,
 		delta.TotalBytes,
 		delta.CompletedBytes,
+		time.Now().UTC(),
 		id,
 	)
 	if err != nil {
@@ -220,7 +224,7 @@ func (s *SessionStore) Complete(ctx context.Context, id string) error {
 
 	result, err := s.db.ExecContext(ctx, query,
 		SessionStatusCompleted,
-		time.Now(),
+		time.Now().UTC(),
 		id,
 		SessionStatusActive,
 	)
@@ -259,7 +263,7 @@ func (s *SessionStore) Cancel(ctx context.Context, id string) error {
 
 	result, err := s.db.ExecContext(ctx, query,
 		SessionStatusCancelled,
-		time.Now(),
+		time.Now().UTC(),
 		id,
 		SessionStatusActive,
 		SessionStatusPaused,

@@ -85,7 +85,7 @@ func ExampleUsage() error {
       downloadDir := "/tmp/downloads"
       if err := os.MkdirAll(downloadDir, 0755); err != nil {
         fmt.Printf("Failed to create download directory: %v\n", err)
-        return
+        return err
       }
       destPath := filepath.Join(downloadDir, firstFile.Name)
       
@@ -145,7 +145,7 @@ func ExampleUsage() error {
     // Create batch download directory
     if err := os.MkdirAll("/tmp/batch_downloads", 0755); err != nil {
       fmt.Printf("Failed to create batch download directory: %v\n", err)
-      return
+      return err
     }
     
     batchDownloader := NewBatchDownloader(driveClient, log, 3)

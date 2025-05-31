@@ -123,23 +123,43 @@ func FormatBytes(bytes int64) string {
 // FormatDuration formats a duration into human readable format.
 func FormatDuration(d time.Duration) string {
 	if d < time.Minute {
-		return fmt.Sprintf("%.0f seconds", d.Seconds())
+		secs := int(d.Seconds())
+		if secs == 1 {
+			return "1 second"
+		}
+		return fmt.Sprintf("%d seconds", secs)
 	}
 
 	if d < time.Hour {
 		mins := int(d.Minutes())
 		secs := int(d.Seconds()) % 60
-		return fmt.Sprintf("%d minutes %d seconds", mins, secs)
+		minUnit := "minutes"
+		if mins == 1 {
+			minUnit = "minute"
+		}
+		secUnit := "seconds"
+		if secs == 1 {
+			secUnit = "second"
+		}
+		return fmt.Sprintf("%d %s %d %s", mins, minUnit, secs, secUnit)
 	}
 
 	hours := int(d.Hours())
 	mins := int(d.Minutes()) % 60
-	return fmt.Sprintf("%d hours %d minutes", hours, mins)
+	hourUnit := "hours"
+	if hours == 1 {
+		hourUnit = "hour"
+	}
+	minUnit := "minutes"
+	if mins == 1 {
+		minUnit = "minute"
+	}
+	return fmt.Sprintf("%d %s %d %s", hours, hourUnit, mins, minUnit)
 }
 
 // CalculateETA calculates estimated time of arrival based on progress.
 func CalculateETA(bytesCompleted, totalBytes int64, elapsedTime time.Duration) time.Duration {
-	if bytesCompleted == 0 || bytesCompleted >= totalBytes {
+	if bytesCompleted == 0 || bytesCompleted >= totalBytes || elapsedTime == 0 {
 		return 0
 	}
 

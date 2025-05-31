@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3" // imported for side-effects: SQLite driver registration
 )
 
 //go:embed schema.sql
@@ -107,13 +107,27 @@ func (db *DB) InitSchema(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	
+	// Track whether commit was successful
+	committed := false
+	defer func() {
+		if !committed {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				// Log rollback error but don't override the original error
+				fmt.Printf("warning: failed to rollback schema transaction: %v\n", rbErr)
+			}
+		}
+	}()
 
 	if _, err := tx.ExecContext(ctx, string(schema)); err != nil {
 		return fmt.Errorf("failed to execute schema: %w", err)
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit schema: %w", err)
+	}
+	committed = true
+	return nil
 }
 
 // Close closes the database connection.
@@ -155,7 +169,9 @@ func (db *DB) WithReadTx(ctx context.Context, fn func(*sqlx.Tx) error) error {
 	}
 
 	if err := fn(tx); err != nil {
-		tx.Rollback()
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return fmt.Errorf("read transaction failed: %w, rollback failed: %w", err, rbErr)
+		}
 		return err
 	}
 

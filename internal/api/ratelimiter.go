@@ -111,6 +111,12 @@ func (rl *RateLimiter) waitWithLimiter(ctx context.Context, limiter *rate.Limite
 
 	// Create reservation
 	reservation := limiter.Reserve()
+	
+	// Check if reservation was successful
+	if !reservation.OK() {
+		return errors.New("rate limiter reservation failed")
+	}
+	
 	delay := reservation.Delay()
 
 	// If delay is zero, we can proceed immediately
@@ -118,9 +124,13 @@ func (rl *RateLimiter) waitWithLimiter(ctx context.Context, limiter *rate.Limite
 		return nil
 	}
 
+	// Create timer to prevent leak
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
 	// Wait for the required delay or context cancellation
 	select {
-	case <-time.After(delay):
+	case <-timer.C:
 		return nil
 	case <-ctx.Done():
 		// Cancel the reservation
@@ -138,11 +148,35 @@ func (rl *RateLimiter) TryAcquire() bool {
 // SetRateLimit updates the rate limit dynamically.
 func (rl *RateLimiter) SetRateLimit(rateLimit int) {
 	rl.limiter.SetLimit(rate.Limit(rateLimit))
+	
+	// Update batch and export limiters proportionally
+	// Batch limiter typically has 50% of main rate limit
+	batchRate := rateLimit / 2
+	if batchRate < 1 {
+		batchRate = 1
+	}
+	rl.batchLimiter.SetLimit(rate.Limit(batchRate))
+	
+	// Export limiter typically has 30% of main rate limit
+	exportRate := rateLimit * 3 / 10
+	if exportRate < 1 {
+		exportRate = 1
+	}
+	rl.exportLimiter.SetLimit(rate.Limit(exportRate))
 }
 
 // SetBurstSize updates the burst size dynamically.
 func (rl *RateLimiter) SetBurstSize(burstSize int) {
 	rl.limiter.SetBurst(burstSize)
+	
+	// Update batch and export limiters proportionally
+	// Batch limiter has double its rate limit as burst
+	batchRate := int(rl.batchLimiter.Limit())
+	rl.batchLimiter.SetBurst(batchRate * 2)
+	
+	// Export limiter has same burst as its rate limit
+	exportRate := int(rl.exportLimiter.Limit())
+	rl.exportLimiter.SetBurst(exportRate)
 }
 
 // GetMetrics returns current rate limiter metrics.
@@ -152,7 +186,12 @@ func (rl *RateLimiter) GetMetrics() RateLimiterMetrics {
 
 	duration := time.Since(rl.lastResetTime)
 	requestsPerSecond := float64(rl.totalRequests) / duration.Seconds()
-	blockRate := float64(rl.blockedRequests) / float64(rl.totalRequests) * 100
+	
+	// Calculate block rate with zero check to prevent divide-by-zero
+	var blockRate float64
+	if rl.totalRequests > 0 {
+		blockRate = float64(rl.blockedRequests) / float64(rl.totalRequests) * 100
+	}
 
 	return RateLimiterMetrics{
 		TotalRequests:     rl.totalRequests,

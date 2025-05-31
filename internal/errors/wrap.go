@@ -43,6 +43,9 @@ func Errorf(format string, args ...interface{}) error {
 
 // WrapTyped wraps an error with a specific error type.
 func WrapTyped(errorType ErrorType, op string, err error) *Error {
+	if err == nil {
+		return nil
+	}
 	return New(errorType, op, "", err)
 }
 

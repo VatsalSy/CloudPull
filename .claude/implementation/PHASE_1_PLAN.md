@@ -1,17 +1,20 @@
 # Phase 1: Core Infrastructure Implementation Plan
 
 ## Overview
+
 Phase 1 focuses on building the foundational components that all other features will depend on.
 
 ## Components to Build
 
 ### 1. Project Setup
+
 - [ ] Initialize Go module: `go mod init github.com/yourusername/cloudpull`
 - [ ] Set up directory structure
 - [ ] Configure development tools (linting, formatting)
 - [ ] Create Makefile for common tasks
 
 ### 2. Configuration System
+
 **File**: `internal/config/config.go`
 
 ```go
@@ -39,9 +42,11 @@ type DownloadConfig struct {
 ```
 
 ### 3. State Management Database
+
 **File**: `internal/state/database.go`
 
 Key Methods:
+
 - `InitDatabase(path string) (*StateDB, error)`
 - `CreateSession(rootFolderID, destination string) (*Session, error)`
 - `GetOrCreateFile(driveID string, metadata FileMetadata) (*File, error)`
@@ -50,9 +55,11 @@ Key Methods:
 - `GetResumePoint(fileID string) (int64, error)`
 
 ### 4. Logging System
+
 **File**: `internal/logger/logger.go`
 
 Using zerolog for structured logging:
+
 ```go
 type Logger struct {
     *zerolog.Logger
@@ -64,6 +71,7 @@ func (l *Logger) TrackProgress(current, total int64)
 ```
 
 ### 5. Error Handling Framework
+
 **File**: `internal/errors/errors.go`
 
 ```go
@@ -97,17 +105,20 @@ type CloudPullError struct {
 ## Testing Requirements
 
 ### Unit Tests
+
 - Configuration loading and validation
 - Database operations (using in-memory SQLite)
 - Error type classification
 - Logger output formatting
 
 ### Integration Tests
+
 - Full state management workflow
 - Configuration file parsing
 - Database migration handling
 
 ## Success Criteria
+
 - [ ] All unit tests passing
 - [ ] Database can handle 100k file entries efficiently
 - [ ] Configuration system supports all planned features

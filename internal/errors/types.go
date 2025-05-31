@@ -12,6 +12,7 @@ package errors
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -219,7 +220,7 @@ func IsContextError(err error) bool {
 	if err == nil {
 		return false
 	}
-	return err == context.Canceled || err == context.DeadlineExceeded
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 // GetErrorType attempts to determine the error type from a generic error.
