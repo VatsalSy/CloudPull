@@ -156,18 +156,24 @@ func runResume(cmd *cobra.Command, args []string) error {
 	// Resume sync with progress monitoring
 	errChan := make(chan error, 1)
 
+	// Create a cancellable context for the monitor goroutine
+	monitorCtx, cancelMonitor := context.WithCancel(ctx)
+	defer cancelMonitor() // Ensure cleanup
+
 	go func() {
 		errChan <- application.ResumeSync(ctx, session.ID)
 	}()
 
-	// Monitor progress
-	go monitorResumeProgress(application)
+	// Monitor progress with context
+	go monitorResumeProgress(monitorCtx, application)
 
 	// Wait for completion
 	if err := <-errChan; err != nil {
+		cancelMonitor() // Cancel monitor on error
 		return fmt.Errorf("resume failed: %w", err)
 	}
 
+	cancelMonitor() // Cancel monitor on success
 	fmt.Println(color.GreenString("\n✅ Sync resumed successfully!"))
 	return nil
 }
@@ -263,7 +269,7 @@ func selectSessionFromApp(ctx context.Context, app *app.App) (*state.Session, er
 	return nil, nil
 }
 
-func monitorResumeProgress(app *app.App) {
+func monitorResumeProgress(ctx context.Context, app *app.App) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -271,33 +277,37 @@ func monitorResumeProgress(app *app.App) {
 	lastUpdate := time.Now()
 
 	for {
-		progress := app.GetProgress()
-		if progress == nil {
-			time.Sleep(time.Second)
-			continue
-		}
-
-		// Update progress every second or on file completion
-		if progress.CompletedFiles > lastFiles || time.Since(lastUpdate) > time.Second {
-			percentage := 0.0
-			if progress.TotalFiles > 0 {
-				percentage = float64(progress.CompletedFiles) / float64(progress.TotalFiles) * 100
-			}
-			fmt.Printf("\rProgress: %d/%d files (%.1f%%) | Speed: %s/s | Active: %d",
-				progress.CompletedFiles, progress.TotalFiles,
-				percentage,
-				formatBytes(progress.CurrentSpeed),
-				progress.ActiveDownloads)
-			lastFiles = progress.CompletedFiles
-			lastUpdate = time.Now()
-		}
-
-		// Check if complete
-		if progress.Status == "stopped" {
+		select {
+		case <-ctx.Done():
+			// Context cancelled, exit cleanly
 			fmt.Println() // New line after progress
-			break
-		}
+			return
+		case <-ticker.C:
+			progress := app.GetProgress()
+			if progress == nil {
+				continue
+			}
 
-		<-ticker.C
+			// Update progress every second or on file completion
+			if progress.CompletedFiles > lastFiles || time.Since(lastUpdate) > time.Second {
+				percentage := 0.0
+				if progress.TotalFiles > 0 {
+					percentage = float64(progress.CompletedFiles) / float64(progress.TotalFiles) * 100
+				}
+				fmt.Printf("\rProgress: %d/%d files (%.1f%%) | Speed: %s/s | Active: %d",
+					progress.CompletedFiles, progress.TotalFiles,
+					percentage,
+					formatBytes(progress.CurrentSpeed),
+					progress.ActiveDownloads)
+				lastFiles = progress.CompletedFiles
+				lastUpdate = time.Now()
+			}
+
+			// Check if complete
+			if progress.Status == "stopped" {
+				fmt.Println() // New line after progress
+				return
+			}
+		}
 	}
 }

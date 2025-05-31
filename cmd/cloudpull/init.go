@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,6 +14,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/oauth2"
 
 	"github.com/VatsalSy/CloudPull/internal/app"
 )
@@ -60,7 +63,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if _, err := os.Stat(configPath); err == nil {
 		var overwrite bool
 		prompt := &survey.Confirm{
-			Message: "CloudPull is already configured. Reconfigure?",
+			Message: "CloudPull is already configured. Reconfiguring will:\n" +
+				"  • Delete your current configuration settings\n" +
+				"  • Remove saved Google Drive authentication\n" +
+				"  • Clear all sync history and progress\n" +
+				"  • Require re-authentication with Google\n\n" +
+				"Do you want to proceed with reconfiguration?",
 			Default: false,
 		}
 		survey.AskOne(prompt, &overwrite)
@@ -89,6 +97,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 			},
 		}
 		survey.AskOne(prompt, &credentialsFile, survey.WithValidator(survey.Required))
+	}
+
+	// Expand tilde in credentials file path
+	if strings.HasPrefix(credentialsFile, "~") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to get user home directory: %w", err)
+		}
+		credentialsFile = filepath.Join(homeDir, credentialsFile[1:])
 	}
 
 	// Validate credentials file
@@ -171,7 +188,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Parse chunk size to bytes
-	chunkSizeBytes := parseChunkSize(config.ChunkSize)
+	chunkSizeBytes, err := parseChunkSize(config.ChunkSize)
+	if err != nil {
+		return fmt.Errorf("invalid chunk size: %w", err)
+	}
 
 	viper.Set("credentials_file", credentialsFile)
 	viper.Set("sync.default_directory", config.DefaultSyncDir)
@@ -213,6 +233,14 @@ func runInit(cmd *cobra.Command, args []string) error {
 		// Perform authentication
 		fmt.Println("\nStarting authentication flow...")
 		if err := application.Authenticate(context.Background()); err != nil {
+			// Check for user cancellation or denial
+			var oauth2Err *oauth2.RetrieveError
+			if errors.As(err, &oauth2Err) && strings.Contains(oauth2Err.ErrorDescription, "access_denied") {
+				return fmt.Errorf("authentication cancelled: user denied access")
+			}
+			if errors.Is(err, io.EOF) {
+				return fmt.Errorf("authentication cancelled by user")
+			}
 			return fmt.Errorf("authentication failed: %w", err)
 		}
 	} else {
@@ -228,7 +256,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func parseChunkSize(size string) int64 {
+func parseChunkSize(size string) (int64, error) {
 	size = strings.ToUpper(strings.TrimSpace(size))
 	multiplier := int64(1)
 
@@ -244,6 +272,16 @@ func parseChunkSize(size string) int64 {
 	}
 
 	var value int64
-	fmt.Sscanf(size, "%d", &value)
-	return value * multiplier
+	n, err := fmt.Sscanf(size, "%d", &value)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse chunk size: %w", err)
+	}
+	if n != 1 {
+		return 0, fmt.Errorf("invalid chunk size format: %s", size)
+	}
+	if value <= 0 {
+		return 0, fmt.Errorf("chunk size must be positive, got: %d", value)
+	}
+	
+	return value * multiplier, nil
 }

@@ -32,6 +32,7 @@ import (
 	"github.com/VatsalSy/CloudPull/internal/logger"
 	"github.com/VatsalSy/CloudPull/internal/state"
 	cloudsync "github.com/VatsalSy/CloudPull/internal/sync"
+	"github.com/VatsalSy/CloudPull/internal/util"
 )
 
 // App is the main application coordinator.
@@ -706,7 +707,7 @@ func (app *App) monitorProgress(ctx context.Context) {
 					"completed", progress.CompletedFiles,
 					"failed", progress.FailedFiles,
 					"total", progress.TotalFiles,
-					"speed", formatBytes(progress.CurrentSpeed)+"/s",
+					"speed", util.FormatBytes(progress.CurrentSpeed)+"/s",
 				)
 				lastProgress = progress
 			}
@@ -728,7 +729,7 @@ func (app *App) applySyncOptions(options *SyncOptions) {
 	if options.BandwidthLimit > 0 {
 		// TODO: Configure rate limiter
 		app.logger.Info("Bandwidth limit applied",
-			"limit", formatBytes(options.BandwidthLimit)+"/s",
+			"limit", util.FormatBytes(options.BandwidthLimit)+"/s",
 		)
 	}
 }
@@ -752,20 +753,6 @@ type SyncOptions struct {
 
 // Helper functions
 
-func formatBytes(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-}
 
 // GetAllSessions returns all sync sessions.
 func (app *App) GetAllSessions() ([]*state.Session, error) {

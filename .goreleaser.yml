@@ -177,15 +177,12 @@ nfpms:
     maintainer: Vatsal Sanjay <vatsalsanjay@gmail.com>
     description: Fast, resumable Google Drive folder synchronization tool
     license: MIT
-    
     formats:
       - deb
       - rpm
       - apk
-    
     dependencies:
       - git
-    
     recommends:
       - golang
 

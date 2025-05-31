@@ -176,7 +176,7 @@ linters-settings:
   # Security
   gosec:
     # Exclude certain rules
-    excludes:
+    exclude:
       - G204  # Subprocess launched with variable
       - G304  # File path provided as taint input
     # Configure rules

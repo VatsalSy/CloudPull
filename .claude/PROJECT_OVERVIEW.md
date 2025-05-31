@@ -44,6 +44,7 @@ CloudPull/
 5. **Phase 5**: Performance optimization and testing
 
 ## Success Metrics
+
 - Handle folders with 1M+ files
 - Achieve 90%+ of available bandwidth utilization
 - 100% resume success rate after interruption
