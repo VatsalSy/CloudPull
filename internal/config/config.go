@@ -28,6 +28,7 @@ type Config struct {
 	Sync            SyncConfig  `mapstructure:"sync"`
 	API             APIConfig   `mapstructure:"api"`
 	Errors          ErrorConfig `mapstructure:"errors"`
+	viper           *viper.Viper
 }
 
 // SyncConfig contains sync-related settings.
@@ -116,6 +117,19 @@ func Load(cfgFile ...string) (*Config, error) {
 	setDefaults(config)
 
 	return config, nil
+}
+
+// LoadFromViper loads configuration from a specific viper instance.
+func LoadFromViper(v *viper.Viper) (*Config, error) {
+	cfg := &Config{viper: v}
+	if err := v.Unmarshal(cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	// Set defaults if not configured
+	setDefaults(cfg)
+
+	return cfg, nil
 }
 
 // Get returns the current configuration.
@@ -343,28 +357,45 @@ func (c *Config) GetDataDir() string {
 
 // GetString returns a string value from viper.
 func (c *Config) GetString(key string) string {
+	if c.viper != nil {
+		return c.viper.GetString(key)
+	}
 	return viper.GetString(key)
 }
 
 // GetInt returns an int value from viper.
 func (c *Config) GetInt(key string) int {
+	if c.viper != nil {
+		return c.viper.GetInt(key)
+	}
 	return viper.GetInt(key)
 }
 
 // GetInt64 returns an int64 value from viper.
 func (c *Config) GetInt64(key string) int64 {
+	if c.viper != nil {
+		return c.viper.GetInt64(key)
+	}
 	return viper.GetInt64(key)
 }
 
 // GetFloat64 returns a float64 value from viper.
 func (c *Config) GetFloat64(key string) float64 {
+	if c.viper != nil {
+		return c.viper.GetFloat64(key)
+	}
 	return viper.GetFloat64(key)
 }
 
 // GetDuration returns a duration value from viper.
 func (c *Config) GetDuration(key string) time.Duration {
 	// Get the value as int (seconds) and convert to duration
-	seconds := viper.GetInt(key)
+	var seconds int
+	if c.viper != nil {
+		seconds = c.viper.GetInt(key)
+	} else {
+		seconds = viper.GetInt(key)
+	}
 	return time.Duration(seconds) * time.Second
 }
 

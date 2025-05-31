@@ -4,20 +4,28 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/VatsalSy/CloudPull/internal/config"
 )
 
 func TestAppInitialization(t *testing.T) {
 	// Setup test config
-	setupTestConfig(t)
+	v := setupTestConfig(t)
 
-	// Create app
-	app, err := New()
+	// Create config loader that uses our local viper instance
+	configLoader := func() (*config.Config, error) {
+		return config.LoadFromViper(v)
+	}
+
+	// Create app with custom config loader
+	app, err := New(WithConfigLoader(configLoader))
 	require.NoError(t, err)
 	assert.NotNil(t, app)
 
@@ -40,10 +48,15 @@ func TestAppAuthInitialization(t *testing.T) {
 		t.Skip("CLOUDPULL_TEST_CREDENTIALS not set")
 	}
 
-	setupTestConfig(t)
-	viper.Set("credentials_file", credFile)
+	v := setupTestConfig(t)
+	v.Set("credentials_file", credFile)
 
-	app, err := New()
+	// Create config loader that uses our local viper instance
+	configLoader := func() (*config.Config, error) {
+		return config.LoadFromViper(v)
+	}
+
+	app, err := New(WithConfigLoader(configLoader))
 	require.NoError(t, err)
 
 	err = app.Initialize()
@@ -63,10 +76,15 @@ func TestAppSyncEngineInitialization(t *testing.T) {
 		t.Skip("CLOUDPULL_TEST_CREDENTIALS not set")
 	}
 
-	setupTestConfig(t)
-	viper.Set("credentials_file", credFile)
+	v := setupTestConfig(t)
+	v.Set("credentials_file", credFile)
 
-	app, err := New()
+	// Create config loader that uses our local viper instance
+	configLoader := func() (*config.Config, error) {
+		return config.LoadFromViper(v)
+	}
+
+	app, err := New(WithConfigLoader(configLoader))
 	require.NoError(t, err)
 
 	err = app.Initialize()
@@ -82,9 +100,14 @@ func TestAppSyncEngineInitialization(t *testing.T) {
 }
 
 func TestAppShutdown(t *testing.T) {
-	setupTestConfig(t)
+	v := setupTestConfig(t)
 
-	app, err := New()
+	// Create config loader that uses our local viper instance
+	configLoader := func() (*config.Config, error) {
+		return config.LoadFromViper(v)
+	}
+
+	app, err := New(WithConfigLoader(configLoader))
 	require.NoError(t, err)
 
 	err = app.Initialize()
@@ -100,28 +123,53 @@ func TestAppShutdown(t *testing.T) {
 }
 
 func TestAppSignalHandling(t *testing.T) {
-	setupTestConfig(t)
+	v := setupTestConfig(t)
 
-	app, err := New()
+	// Create config loader that uses our local viper instance
+	configLoader := func() (*config.Config, error) {
+		return config.LoadFromViper(v)
+	}
+
+	app, err := New(WithConfigLoader(configLoader))
 	require.NoError(t, err)
 
 	err = app.Initialize()
 	require.NoError(t, err)
 
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	// Create a context that the app will use
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Simulate signal handling
+	// Channel to signal when the app has started handling signals
+	started := make(chan struct{})
+
+	// Start the app's signal handling in a goroutine
 	go func() {
-		time.Sleep(500 * time.Millisecond)
-		cancel()
+		// Notify that we're about to start signal handling
+		close(started)
+		// This will block until a signal is received
+		app.handleSignals(cancel)
 	}()
 
-	// Wait for context cancellation
-	<-ctx.Done()
+	// Wait for signal handling to start
+	<-started
 
-	// App should handle gracefully
+	// Give it a moment to set up signal handlers
+	time.Sleep(100 * time.Millisecond)
+
+	// Send SIGINT to the current process
+	err = syscall.Kill(os.Getpid(), syscall.SIGINT)
+	require.NoError(t, err)
+
+	// Wait for context to be canceled by the signal handler
+	select {
+	case <-ctx.Done():
+		// Signal was handled correctly
+	case <-time.After(2 * time.Second):
+		t.Fatal("Signal handler did not cancel context within timeout")
+	}
+
+	// App should handle graceful shutdown
 	err = app.Stop()
 	assert.NoError(t, err)
 }
@@ -166,42 +214,44 @@ func TestFormatBytes(t *testing.T) {
 
 // Helper functions
 
-func setupTestConfig(t *testing.T) {
+func setupTestConfig(t *testing.T) *viper.Viper {
 	t.Helper()
 
 	// Create temp directory
 	tempDir := t.TempDir()
 
-	// Reset viper
-	viper.Reset()
+	// Create a new local viper instance
+	v := viper.New()
 
-	// Set test configuration
-	viper.Set("version", "test")
-	viper.Set("log.level", "debug")
-	viper.Set("log.format", "text")
-	viper.Set("log.output", "stdout")
+	// Set test configuration on the local instance
+	v.Set("version", "test")
+	v.Set("log.level", "debug")
+	v.Set("log.format", "text")
+	v.Set("log.output", "stdout")
 
 	// Use temp directory for data
 	dataDir := filepath.Join(tempDir, ".cloudpull")
-	viper.Set("data_dir", dataDir)
+	v.Set("data_dir", dataDir)
 
 	// Sync settings
-	viper.Set("sync.max_concurrent", 2)
-	viper.Set("sync.chunk_size_bytes", 1024*1024)
-	viper.Set("sync.progress_interval", 1)
-	viper.Set("sync.checkpoint_interval", 5)
-	viper.Set("sync.max_errors", 10)
+	v.Set("sync.max_concurrent", 2)
+	v.Set("sync.chunk_size_bytes", 1024*1024)
+	v.Set("sync.progress_interval", 1)
+	v.Set("sync.checkpoint_interval", 5)
+	v.Set("sync.max_errors", 10)
 
 	// API settings
-	viper.Set("api.max_retries", 3)
-	viper.Set("api.retry_delay", 1)
-	viper.Set("api.request_timeout", 30)
-	viper.Set("api.max_concurrent", 5)
-	viper.Set("api.rate_limit", 10)
+	v.Set("api.max_retries", 3)
+	v.Set("api.retry_delay", 1)
+	v.Set("api.request_timeout", 30)
+	v.Set("api.max_concurrent", 5)
+	v.Set("api.rate_limit", 10)
 
 	// Error settings
-	viper.Set("errors.max_retries", 3)
-	viper.Set("errors.retry_delay", 1)
-	viper.Set("errors.retry_multiplier", 2.0)
-	viper.Set("errors.retry_max_delay", 30)
+	v.Set("errors.max_retries", 3)
+	v.Set("errors.retry_delay", 1)
+	v.Set("errors.retry_multiplier", 2.0)
+	v.Set("errors.retry_max_delay", 30)
+
+	return v
 }

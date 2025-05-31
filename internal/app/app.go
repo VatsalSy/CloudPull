@@ -48,13 +48,33 @@ type App struct {
 	shutdownOnce  sync.Once
 	isInitialized bool
 	isRunning     bool
+	configLoader  func() (*config.Config, error)
+}
+
+// Option is a functional option for configuring the App.
+type Option func(*App)
+
+// WithConfigLoader sets a custom config loader function.
+func WithConfigLoader(loader func() (*config.Config, error)) Option {
+	return func(app *App) {
+		app.configLoader = loader
+	}
 }
 
 // New creates a new application instance.
-func New() (*App, error) {
-	return &App{
+func New(opts ...Option) (*App, error) {
+	app := &App{
 		shutdownChan: make(chan struct{}),
-	}, nil
+		configLoader: func() (*config.Config, error) {
+			return config.Load("")
+		}, // default to global config loader
+	}
+	
+	for _, opt := range opts {
+		opt(app)
+	}
+	
+	return app, nil
 }
 
 // Initialize initializes the application with configuration.
@@ -67,7 +87,7 @@ func (app *App) Initialize() error {
 	}
 
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := app.configLoader()
 	if err != nil {
 		return errors.Wrap(err, "failed to load configuration")
 	}
@@ -163,25 +183,32 @@ func (app *App) InitializeAuth() error {
 
 	app.authManager = authManager
 
-	// Get Drive service
-	driveService, err := authManager.GetDriveService(context.Background())
-	if err != nil {
-		return errors.Wrap(err, "failed to get drive service")
+	// Only initialize API client if already authenticated
+	if authManager.IsAuthenticated() {
+		// Get Drive service
+		driveService, err := authManager.GetDriveService(context.Background())
+		if err != nil {
+			// If we can't get drive service but auth manager exists, that's ok
+			// The user might need to authenticate first
+			app.logger.Warn("Could not get drive service, authentication may be required", "error", err)
+			return nil
+		}
+
+		// Initialize rate limiter
+		rateLimiterConfig := &api.RateLimiterConfig{
+			RateLimit:       app.config.GetInt("api.rate_limit"),
+			BurstSize:       app.config.GetInt("api.rate_limit") * 2,
+			BatchRateLimit:  app.config.GetInt("api.rate_limit") / 2,
+			ExportRateLimit: app.config.GetInt("api.rate_limit") / 4,
+		}
+		rateLimiter := api.NewRateLimiter(rateLimiterConfig)
+
+		// Initialize API client
+		app.apiClient = api.NewDriveClient(driveService, rateLimiter, app.logger)
+		app.logger.Info("API client initialized successfully")
 	}
 
-	// Initialize rate limiter
-	rateLimiterConfig := &api.RateLimiterConfig{
-		RateLimit:       app.config.GetInt("api.rate_limit"),
-		BurstSize:       app.config.GetInt("api.rate_limit") * 2,
-		BatchRateLimit:  app.config.GetInt("api.rate_limit") / 2,
-		ExportRateLimit: app.config.GetInt("api.rate_limit") / 4,
-	}
-	rateLimiter := api.NewRateLimiter(rateLimiterConfig)
-
-	// Initialize API client
-	app.apiClient = api.NewDriveClient(driveService, rateLimiter, app.logger)
-
-	app.logger.Info("Authentication initialized successfully")
+	app.logger.Info("Authentication manager initialized successfully")
 	return nil
 }
 
@@ -244,6 +271,20 @@ func (app *App) InitializeSyncEngine() error {
 	return nil
 }
 
+// InitializeForAuth initializes the application for authentication operations.
+// This combines Initialize() and InitializeAuth() for convenience.
+func (app *App) InitializeForAuth() error {
+	if err := app.Initialize(); err != nil {
+		return errors.Wrap(err, "failed to initialize application")
+	}
+
+	if err := app.InitializeAuth(); err != nil {
+		return errors.Wrap(err, "failed to initialize authentication")
+	}
+
+	return nil
+}
+
 // Authenticate performs OAuth2 authentication.
 func (app *App) Authenticate(ctx context.Context) error {
 	if app.authManager == nil {
@@ -258,13 +299,77 @@ func (app *App) Authenticate(ctx context.Context) error {
 		return nil
 	}
 
-	// Perform authentication
-	_, err := app.authManager.GetClient(ctx)
+	// This method should be called by the CLI layer with the auth code
+	// The CLI should handle the interactive flow
+	return errors.NewSimple("authentication required - please use GetAuthURL and ExchangeAuthCode")
+}
+
+// GetAuthURL returns the OAuth2 authorization URL for user authentication.
+func (app *App) GetAuthURL() (string, error) {
+	if app.authManager == nil {
+		if err := app.InitializeAuth(); err != nil {
+			return "", err
+		}
+	}
+	return app.authManager.GetAuthURL(), nil
+}
+
+// GetRedirectURL returns the configured OAuth2 redirect URL.
+func (app *App) GetRedirectURL() (string, error) {
+	if app.authManager == nil {
+		if err := app.InitializeAuth(); err != nil {
+			return "", err
+		}
+	}
+	return app.authManager.GetRedirectURL(), nil
+}
+
+// ExchangeAuthCode exchanges an authorization code for an OAuth2 token.
+func (app *App) ExchangeAuthCode(ctx context.Context, authCode string) error {
+	if app.authManager == nil {
+		if err := app.InitializeAuth(); err != nil {
+			return err
+		}
+	}
+
+	_, err := app.authManager.ExchangeAuthCode(ctx, authCode)
 	if err != nil {
-		return errors.Wrap(err, "authentication failed")
+		return errors.Wrap(err, "failed to exchange auth code")
+	}
+
+	// Now initialize the API client since we have authentication
+	if err := app.initializeAPIClient(ctx); err != nil {
+		return errors.Wrap(err, "failed to initialize API client after authentication")
 	}
 
 	app.logger.Info("Authentication successful")
+	return nil
+}
+
+// initializeAPIClient initializes the API client after authentication.
+func (app *App) initializeAPIClient(ctx context.Context) error {
+	if app.authManager == nil {
+		return errors.NewSimple("auth manager not initialized")
+	}
+
+	// Get Drive service
+	driveService, err := app.authManager.GetDriveService(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get drive service")
+	}
+
+	// Initialize rate limiter
+	rateLimiterConfig := &api.RateLimiterConfig{
+		RateLimit:       app.config.GetInt("api.rate_limit"),
+		BurstSize:       app.config.GetInt("api.rate_limit") * 2,
+		BatchRateLimit:  app.config.GetInt("api.rate_limit") / 2,
+		ExportRateLimit: app.config.GetInt("api.rate_limit") / 4,
+	}
+	rateLimiter := api.NewRateLimiter(rateLimiterConfig)
+
+	// Initialize API client
+	app.apiClient = api.NewDriveClient(driveService, rateLimiter, app.logger)
+
 	return nil
 }
 
