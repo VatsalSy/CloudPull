@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS download_chunks (
     FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
 );
 
--- Error log table
+-- Error log table with proper foreign key constraints
 CREATE TABLE IF NOT EXISTS error_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL,
@@ -94,7 +94,12 @@ CREATE TABLE IF NOT EXISTS error_log (
     retry_count INTEGER DEFAULT 0,
     is_retryable BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+    -- Composite foreign key pattern to ensure referential integrity
+    CONSTRAINT fk_error_log_item CHECK (
+        (item_type = 'file' AND item_id IN (SELECT id FROM files)) OR
+        (item_type = 'folder' AND item_id IN (SELECT id FROM folders))
+    )
 );
 
 -- Configuration table
@@ -121,29 +126,52 @@ CREATE INDEX IF NOT EXISTS idx_chunks_status ON download_chunks(status);
 CREATE INDEX IF NOT EXISTS idx_errors_session_id ON error_log(session_id);
 CREATE INDEX IF NOT EXISTS idx_errors_item_id ON error_log(item_id);
 
--- Triggers for updated_at
+-- Triggers for updated_at (using BEFORE UPDATE to avoid recursion)
+-- Note: SQLite doesn't support direct assignment to NEW values in triggers,
+-- so we need to ensure updated_at is set explicitly in UPDATE statements
 CREATE TRIGGER IF NOT EXISTS update_sessions_timestamp 
-    AFTER UPDATE ON sessions
+    BEFORE UPDATE OF id, root_folder_id, root_folder_name, destination_path, status, 
+                     total_files, completed_files, failed_files, skipped_files,
+                     total_bytes, completed_bytes, start_time, end_time,
+                     error, last_error
+    ON sessions
+    FOR EACH ROW
     BEGIN
-        UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        SELECT RAISE(ABORT, 'Direct updates must include updated_at = CURRENT_TIMESTAMP')
+        WHERE NEW.updated_at = OLD.updated_at;
     END;
 
 CREATE TRIGGER IF NOT EXISTS update_folders_timestamp 
-    AFTER UPDATE ON folders
+    BEFORE UPDATE OF drive_id, parent_id, name, path, mime_type, status,
+                     total_files, completed_files, failed_files, skipped_files,
+                     total_bytes, completed_bytes, session_id, retry_count,
+                     last_error
+    ON folders
+    FOR EACH ROW
     BEGIN
-        UPDATE folders SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        SELECT RAISE(ABORT, 'Direct updates must include updated_at = CURRENT_TIMESTAMP')
+        WHERE NEW.updated_at = OLD.updated_at;
     END;
 
 CREATE TRIGGER IF NOT EXISTS update_files_timestamp 
-    AFTER UPDATE ON files
+    BEFORE UPDATE OF drive_id, folder_id, name, path, size, mime_type, 
+                     md5_checksum, modified_time, status, local_path,
+                     download_attempts, session_id, retry_count, last_error,
+                     chunk_size, total_chunks, completed_chunks
+    ON files
+    FOR EACH ROW
     BEGIN
-        UPDATE files SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        SELECT RAISE(ABORT, 'Direct updates must include updated_at = CURRENT_TIMESTAMP')
+        WHERE NEW.updated_at = OLD.updated_at;
     END;
 
 CREATE TRIGGER IF NOT EXISTS update_config_timestamp 
-    AFTER UPDATE ON config
+    BEFORE UPDATE OF value
+    ON config
+    FOR EACH ROW
     BEGIN
-        UPDATE config SET updated_at = CURRENT_TIMESTAMP WHERE key = NEW.key;
+        SELECT RAISE(ABORT, 'Direct updates must include updated_at = CURRENT_TIMESTAMP')
+        WHERE NEW.updated_at = OLD.updated_at;
     END;
 
 -- Views for easier querying
