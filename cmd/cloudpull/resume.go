@@ -137,7 +137,9 @@ func runResume(cmd *cobra.Command, args []string) error {
 			Message: "Attempt to resume anyway?",
 			Default: false,
 		}
-		survey.AskOne(prompt, &proceed)
+		if err := survey.AskOne(prompt, &proceed); err != nil {
+			return fmt.Errorf("failed to get user confirmation for failed session: %w", err)
+		}
 		if !proceed {
 			return nil
 		}
@@ -149,7 +151,9 @@ func runResume(cmd *cobra.Command, args []string) error {
 		Message: "Resume this sync session?",
 		Default: true,
 	}
-	survey.AskOne(prompt, &confirm)
+	if err := survey.AskOne(prompt, &confirm); err != nil {
+		return fmt.Errorf("failed to get resume confirmation: %w", err)
+	}
 	if !confirm {
 		return nil
 	}
@@ -257,7 +261,9 @@ func selectSessionFromApp(ctx context.Context, app *app.App) (*state.Session, er
 		Message: "Select session to resume:",
 		Options: options,
 	}
-	survey.AskOne(prompt, &selected)
+	if err := survey.AskOne(prompt, &selected); err != nil {
+		return nil, fmt.Errorf("failed to get session selection: %w", err)
+	}
 
 	if selected != "" {
 		// Extract index from selection
@@ -271,7 +277,7 @@ func selectSessionFromApp(ctx context.Context, app *app.App) (*state.Session, er
 }
 
 func monitorResumeProgress(ctx context.Context, app *app.App) {
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	lastFiles := int64(0)
