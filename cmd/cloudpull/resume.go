@@ -13,6 +13,7 @@ import (
 
 	"github.com/VatsalSy/CloudPull/internal/app"
 	"github.com/VatsalSy/CloudPull/internal/state"
+	"github.com/VatsalSy/CloudPull/internal/util"
 )
 
 var resumeCmd = &cobra.Command{
@@ -117,7 +118,7 @@ func runResume(cmd *cobra.Command, args []string) error {
 			session.CompletedFiles, session.TotalFiles,
 			float64(session.CompletedFiles)/float64(session.TotalFiles)*100)
 		fmt.Printf("  Downloaded: %s of %s\n",
-			formatBytes(session.CompletedBytes), formatBytes(session.TotalBytes))
+			util.FormatBytes(session.CompletedBytes), util.FormatBytes(session.TotalBytes))
 	} else {
 		fmt.Printf("  Progress: %d files completed\n", session.CompletedFiles)
 	}
@@ -216,10 +217,10 @@ func selectSessionFromApp(ctx context.Context, app *app.App) (*state.Session, er
 		size := "N/A"
 		if session.TotalBytes > 0 {
 			size = fmt.Sprintf("%s/%s",
-				formatBytes(session.CompletedBytes),
-				formatBytes(session.TotalBytes))
+				util.FormatBytes(session.CompletedBytes),
+				util.FormatBytes(session.TotalBytes))
 		} else if session.CompletedBytes > 0 {
-			size = formatBytes(session.CompletedBytes)
+			size = util.FormatBytes(session.CompletedBytes)
 		}
 
 		statusColor := session.Status
@@ -297,7 +298,7 @@ func monitorResumeProgress(ctx context.Context, app *app.App) {
 				fmt.Printf("\rProgress: %d/%d files (%.1f%%) | Speed: %s/s | Active: %d",
 					progress.CompletedFiles, progress.TotalFiles,
 					percentage,
-					formatBytes(progress.CurrentSpeed),
+					util.FormatBytes(progress.CurrentSpeed),
 					progress.ActiveDownloads)
 				lastFiles = progress.CompletedFiles
 				lastUpdate = time.Now()

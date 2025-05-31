@@ -5,7 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
@@ -13,6 +15,8 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/VatsalSy/CloudPull/internal/config"
 )
 
 var configCmd = &cobra.Command{
@@ -192,8 +196,18 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 	switch oldValue.(type) {
 	case bool:
 		newValue = strings.ToLower(value) == "true"
-	case int, int64:
-		fmt.Sscanf(value, "%d", &newValue)
+	case int:
+		parsedInt, err := strconv.ParseInt(value, 10, 0)
+		if err != nil {
+			return fmt.Errorf("invalid integer value for %s: %w", key, err)
+		}
+		newValue = int(parsedInt)
+	case int64:
+		parsedInt, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid integer value for %s: %w", key, err)
+		}
+		newValue = parsedInt
 	default:
 		newValue = value
 	}
@@ -229,34 +243,9 @@ func runConfigReset(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Create default configuration
-	defaults := map[string]interface{}{
-		"sync": map[string]interface{}{
-			"default_directory": filepath.Join(os.Getenv("HOME"), "CloudPull"),
-			"max_concurrent":    3,
-			"chunk_size":        "1MB",
-			"resume_on_failure": true,
-		},
-		"files": map[string]interface{}{
-			"skip_duplicates":     true,
-			"preserve_timestamps": true,
-			"follow_shortcuts":    false,
-		},
-		"cache": map[string]interface{}{
-			"enabled": true,
-			"ttl":     60,
-		},
-		"log": map[string]interface{}{
-			"level": "info",
-			"file":  "",
-		},
-	}
-
-	// Reset viper
+	// Reset viper to defaults from the config package
 	viper.Reset()
-	for key, value := range defaults {
-		viper.Set(key, value)
-	}
+	config.Load() // This will set all defaults via setViperDefaults()
 
 	// Save configuration
 	configFile := viper.ConfigFileUsed()
@@ -358,23 +347,38 @@ func flattenMap(prefix string, m map[string]interface{}) map[string]interface{} 
 	return result
 }
 
+// getAllValidKeys dynamically generates the list of valid configuration keys
+// by reflecting on the config.Config struct and its nested fields
 func getAllValidKeys() []string {
-	return []string{
-		"credentials_file",
-		"token_file",
-		"sync.default_directory",
-		"sync.max_concurrent",
-		"sync.chunk_size",
-		"sync.bandwidth_limit",
-		"sync.resume_on_failure",
-		"files.skip_duplicates",
-		"files.preserve_timestamps",
-		"files.follow_shortcuts",
-		"cache.enabled",
-		"cache.ttl",
-		"log.level",
-		"log.file",
+	cfg := &config.Config{}
+	return extractKeysFromStruct(reflect.TypeOf(*cfg), "")
+}
+
+// extractKeysFromStruct recursively extracts all configuration keys from a struct
+func extractKeysFromStruct(t reflect.Type, prefix string) []string {
+	var keys []string
+
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		tag := field.Tag.Get("mapstructure")
+		if tag == "" || tag == "-" {
+			continue
+		}
+
+		key := tag
+		if prefix != "" {
+			key = prefix + "." + tag
+		}
+
+		// If it's a struct (not time.Time or other special types), recurse
+		if field.Type.Kind() == reflect.Struct && field.Type.String() != "time.Time" {
+			keys = append(keys, extractKeysFromStruct(field.Type, key)...)
+		} else {
+			keys = append(keys, key)
+		}
 	}
+
+	return keys
 }
 
 func contains(slice []string, item string) bool {

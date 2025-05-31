@@ -18,7 +18,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -244,50 +243,41 @@ func (s *FolderStore) UpdateStatusBatch(ctx context.Context, ids []string, statu
 	}
 
 	// Use a transaction to ensure all updates succeed or none do
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// Prepare the update statement once
-	stmt, err := tx.PrepareContext(ctx, "UPDATE folders SET status = $1 WHERE id = $2")
-	if err != nil {
-		return fmt.Errorf("failed to prepare statement: %w", err)
-	}
-	defer stmt.Close()
-
-	// Execute update for each ID
-	updatedCount := 0
-	for _, id := range ids {
-		result, err := stmt.ExecContext(ctx, status, id)
+	return s.db.WithTx(ctx, func(tx *sqlx.Tx) error {
+		// Prepare the update statement once
+		stmt, err := tx.PrepareContext(ctx, "UPDATE folders SET status = $1 WHERE id = $2")
 		if err != nil {
-			return fmt.Errorf("failed to update folder %s: %w", id, err)
+			return fmt.Errorf("failed to prepare statement: %w", err)
+		}
+		defer stmt.Close()
+
+		// Execute update for each ID
+		updatedCount := 0
+		for _, id := range ids {
+			result, err := stmt.ExecContext(ctx, status, id)
+			if err != nil {
+				return fmt.Errorf("failed to update folder %s: %w", id, err)
+			}
+
+			rows, err := result.RowsAffected()
+			if err != nil {
+				return fmt.Errorf("failed to get rows affected for folder %s: %w", id, err)
+			}
+
+			if rows == 0 {
+				return fmt.Errorf("folder not found: %s", id)
+			}
+
+			updatedCount++
 		}
 
-		rows, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("failed to get rows affected for folder %s: %w", id, err)
+		// Verify all folders were updated
+		if updatedCount != len(ids) {
+			return fmt.Errorf("expected to update %d folders, but updated %d", len(ids), updatedCount)
 		}
 
-		if rows == 0 {
-			return fmt.Errorf("folder not found: %s", id)
-		}
-
-		updatedCount++
-	}
-
-	// Verify all folders were updated
-	if updatedCount != len(ids) {
-		return fmt.Errorf("expected to update %d folders, but updated %d", len(ids), updatedCount)
-	}
-
-	// Commit the transaction
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // MarkAsScanning marks a folder as being scanned.

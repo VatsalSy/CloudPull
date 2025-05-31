@@ -17,6 +17,7 @@ import (
 
 	"github.com/VatsalSy/CloudPull/internal/app"
 	"github.com/VatsalSy/CloudPull/internal/state"
+	"github.com/VatsalSy/CloudPull/internal/util"
 	"github.com/VatsalSy/CloudPull/pkg/progress"
 )
 
@@ -136,7 +137,7 @@ func showActiveSessions(sessions []ActiveSession) {
 		fmt.Printf("  Files: %d/%d (%.0f%%) | Speed: %s/s | ETA: %s\n",
 			session.CompletedFiles, session.TotalFiles,
 			float64(session.CompletedFiles)/float64(session.TotalFiles)*100,
-			formatBytes(session.Speed),
+			util.FormatBytes(session.Speed),
 			formatDuration(session.ETA))
 
 		if session.CurrentFile != "" {
@@ -172,24 +173,24 @@ func showDetailedSession(session ActiveSession) error {
 		session.CompletedFiles, session.TotalFiles,
 		float64(session.CompletedFiles)/float64(session.TotalFiles)*100)
 	fmt.Printf("  Downloaded : %s / %s (%.1f%%)\n",
-		formatBytes(session.DownloadedBytes), formatBytes(session.TotalBytes),
+		util.FormatBytes(session.DownloadedBytes), util.FormatBytes(session.TotalBytes),
 		float64(session.DownloadedBytes)/float64(session.TotalBytes)*100)
-	fmt.Printf("  Remaining  : %s\n", formatBytes(session.TotalBytes-session.DownloadedBytes))
+	fmt.Printf("  Remaining  : %s\n", util.FormatBytes(session.TotalBytes-session.DownloadedBytes))
 
 	fmt.Println()
 
 	// Transfer stats
 	fmt.Println(color.YellowString("Transfer Statistics:"))
-	fmt.Printf("  Current Speed : %s/s\n", formatBytes(session.Speed))
-	fmt.Printf("  Average Speed : %s/s\n", formatBytes(session.AvgSpeed))
-	fmt.Printf("  Peak Speed    : %s/s\n", formatBytes(session.PeakSpeed))
+	fmt.Printf("  Current Speed : %s/s\n", util.FormatBytes(session.Speed))
+	fmt.Printf("  Average Speed : %s/s\n", util.FormatBytes(session.AvgSpeed))
+	fmt.Printf("  Peak Speed    : %s/s\n", util.FormatBytes(session.PeakSpeed))
 	fmt.Printf("  ETA           : %s\n", formatDuration(session.ETA))
 
 	if session.CurrentFile != "" {
 		fmt.Println()
 		fmt.Println(color.YellowString("Current Activity:"))
 		fmt.Printf("  Downloading: %s\n", session.CurrentFile)
-		fmt.Printf("  File Size  : %s\n", formatBytes(session.CurrentFileSize))
+		fmt.Printf("  File Size  : %s\n", util.FormatBytes(session.CurrentFileSize))
 		fmt.Printf("  Progress   : %.1f%%\n", session.CurrentFileProgress)
 	}
 
@@ -198,7 +199,7 @@ func showDetailedSession(session ActiveSession) error {
 		fmt.Println()
 		fmt.Println(color.YellowString("Recently Completed:"))
 		for _, file := range session.RecentFiles {
-			fmt.Printf("  ✓ %s (%s)\n", file.Name, formatBytes(file.Size))
+			fmt.Printf("  ✓ %s (%s)\n", file.Name, util.FormatBytes(file.Size))
 		}
 	}
 
@@ -247,7 +248,7 @@ func showSyncHistory() error {
 			session.EndTime.Format("Jan 2 15:04"),
 			formatDuration(session.Duration),
 			fmt.Sprintf("%d", session.TotalFiles),
-			formatBytes(session.TotalBytes),
+			util.FormatBytes(session.TotalBytes),
 			status,
 		})
 	}
@@ -263,12 +264,12 @@ func showSystemStats() {
 
 	stats := getSystemStats()
 	fmt.Printf("  Network Usage    : %s/s ↓ / %s/s ↑\n",
-		formatBytes(stats.DownloadRate), formatBytes(stats.UploadRate))
+		util.FormatBytes(stats.DownloadRate), util.FormatBytes(stats.UploadRate))
 	fmt.Printf("  Disk Space       : %s free of %s\n",
-		formatBytes(stats.DiskFree), formatBytes(stats.DiskTotal))
+		util.FormatBytes(stats.DiskFree), util.FormatBytes(stats.DiskTotal))
 	fmt.Printf("  Memory Usage     : %.1f%% (%s / %s)\n",
 		float64(stats.MemUsed)/float64(stats.MemTotal)*100,
-		formatBytes(stats.MemUsed), formatBytes(stats.MemTotal))
+		util.FormatBytes(stats.MemUsed), util.FormatBytes(stats.MemTotal))
 	fmt.Printf("  Active Threads   : %d\n", stats.ActiveThreads)
 }
 

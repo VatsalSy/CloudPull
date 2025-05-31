@@ -1,9 +1,9 @@
 ---
 name: Feature request
 about: Suggest an idea for CloudPull
-title: '[FEATURE] '
+title: '[FEATURE]'
 labels: enhancement
-assignees: ''
+assignees: []
 
 ---
 

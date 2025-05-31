@@ -18,7 +18,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/VatsalSy/CloudPull/internal/app"
-	"github.com/VatsalSy/CloudPull/internal/util"
 )
 
 var syncCmd = &cobra.Command{
@@ -115,7 +114,20 @@ func runSync(cmd *cobra.Command, args []string) error {
 		outputDir = viper.GetString("sync.default_directory")
 		if outputDir == "" {
 			home, _ := os.UserHomeDir()
-			outputDir = filepath.Join(home, "CloudPull", folderID)
+			// Sanitize folderID to prevent path traversal
+			cleanedFolderID := filepath.Clean(folderID)
+			// Remove any leading slashes or dots
+			cleanedFolderID = strings.TrimLeft(cleanedFolderID, "./")
+			// Ensure it doesn't contain parent directory references
+			if strings.Contains(cleanedFolderID, "..") {
+				return fmt.Errorf("invalid folder ID: contains directory traversal")
+			}
+			outputDir = filepath.Join(home, "CloudPull", cleanedFolderID)
+			// Validate the final path doesn't escape the base directory
+			baseDir := filepath.Join(home, "CloudPull")
+			if !strings.HasPrefix(filepath.Clean(outputDir), filepath.Clean(baseDir)) {
+				return fmt.Errorf("invalid output directory: path traversal detected")
+			}
 		}
 	}
 
@@ -140,7 +152,14 @@ func runSync(cmd *cobra.Command, args []string) error {
 			Message: "Start sync?",
 			Default: true,
 		}
-		survey.AskOne(prompt, &proceed)
+		err := survey.AskOne(prompt, &proceed)
+		if err != nil {
+			// Handle user cancellation or I/O errors
+			if err.Error() == "interrupt" {
+				return fmt.Errorf("sync cancelled by user")
+			}
+			return fmt.Errorf("failed to get user confirmation: %w", err)
+		}
 		if !proceed {
 			return nil
 		}
@@ -292,7 +311,11 @@ func selectDriveFolder() string {
 	prompt := &survey.Input{
 		Message: "Enter Google Drive folder ID or URL:",
 	}
-	survey.AskOne(prompt, &folderID)
+	err := survey.AskOne(prompt, &folderID)
+	if err != nil {
+		// Handle user cancellation or I/O errors
+		return ""
+	}
 	return extractFolderID(folderID)
 }
 
