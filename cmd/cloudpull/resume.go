@@ -279,9 +279,13 @@ func monitorResumeProgress(app *app.App) {
 
 		// Update progress every second or on file completion
 		if progress.CompletedFiles > lastFiles || time.Since(lastUpdate) > time.Second {
+			percentage := 0.0
+			if progress.TotalFiles > 0 {
+				percentage = float64(progress.CompletedFiles) / float64(progress.TotalFiles) * 100
+			}
 			fmt.Printf("\rProgress: %d/%d files (%.1f%%) | Speed: %s/s | Active: %d",
 				progress.CompletedFiles, progress.TotalFiles,
-				float64(progress.CompletedFiles)/float64(progress.TotalFiles)*100,
+				percentage,
 				formatBytes(progress.CurrentSpeed),
 				progress.ActiveDownloads)
 			lastFiles = progress.CompletedFiles

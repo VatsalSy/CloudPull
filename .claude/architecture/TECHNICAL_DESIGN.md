@@ -24,7 +24,7 @@
 
 ## Component Specifications
 
-### 1. CLI Interface
+### 1. CLI
 
 - **Framework**: Cobra
 - **Commands**:
