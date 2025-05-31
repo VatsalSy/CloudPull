@@ -232,9 +232,10 @@ func TestHandler(t *testing.T) {
 		assert.True(t, err.Retry.BackoffDuration >= 1*time.Second)
 
 		// Second retry
+		previousBackoff := err.Retry.BackoffDuration
 		err = handler.PrepareRetry(err)
 		assert.Equal(t, 2, err.Retry.Attempt)
-		assert.True(t, err.Retry.BackoffDuration >= err.Retry.BackoffDuration)
+		assert.True(t, err.Retry.BackoffDuration > previousBackoff)
 	})
 
 	t.Run("RecoverWithStrategy", func(t *testing.T) {
@@ -299,8 +300,8 @@ func TestExponentialBackoff(t *testing.T) {
 
 	t.Run("MaxElapsedTime", func(t *testing.T) {
 		config := &BackoffConfig{
-			InitialInterval: 100 * time.Millisecond,
-			MaxElapsedTime:  200 * time.Millisecond,
+			InitialInterval: 10 * time.Millisecond,
+			MaxElapsedTime:  30 * time.Millisecond,
 		}
 
 		backoff := NewExponentialBackoff(config)
@@ -310,7 +311,7 @@ func TestExponentialBackoff(t *testing.T) {
 		assert.True(t, interval1 > 0)
 
 		// Wait to exceed max elapsed time
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 
 		// Next backoff should return -1
 		interval2 := backoff.NextBackOff()

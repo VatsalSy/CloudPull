@@ -243,33 +243,48 @@ func (s *FolderStore) UpdateStatusBatch(ctx context.Context, ids []string, statu
 		return nil
 	}
 
-	// Build placeholders for IN clause
-	placeholders := make([]string, len(ids))
-	args := make([]interface{}, len(ids)+1)
-	args[0] = status
-
-	for i, id := range ids {
-		placeholders[i] = fmt.Sprintf("$%d", i+2)
-		args[i+1] = id
-	}
-
-	query := fmt.Sprintf(
-		"UPDATE folders SET status = $1 WHERE id IN (%s)",
-		strings.Join(placeholders, ","),
-	)
-
-	result, err := s.db.ExecContext(ctx, query, args...)
+	// Use a transaction to ensure all updates succeed or none do
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to update folder statuses: %w", err)
+		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
+	defer tx.Rollback()
 
-	rows, err := result.RowsAffected()
+	// Prepare the update statement once
+	stmt, err := tx.PrepareContext(ctx, "UPDATE folders SET status = $1 WHERE id = $2")
 	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	// Execute update for each ID
+	updatedCount := 0
+	for _, id := range ids {
+		result, err := stmt.ExecContext(ctx, status, id)
+		if err != nil {
+			return fmt.Errorf("failed to update folder %s: %w", id, err)
+		}
+
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to get rows affected for folder %s: %w", id, err)
+		}
+
+		if rows == 0 {
+			return fmt.Errorf("folder not found: %s", id)
+		}
+
+		updatedCount++
 	}
 
-	if int(rows) != len(ids) {
-		return fmt.Errorf("expected to update %d folders, but updated %d", len(ids), rows)
+	// Verify all folders were updated
+	if updatedCount != len(ids) {
+		return fmt.Errorf("expected to update %d folders, but updated %d", len(ids), updatedCount)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil

@@ -16,7 +16,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"

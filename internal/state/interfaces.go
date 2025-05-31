@@ -1,15 +1,15 @@
-/**
- * Database Interfaces for CloudPull State Management
- *
- * Features:
- * - Common interface for database operations
- * - Support for both DB and Transaction contexts
- * - Type-safe database operations
- *
- * Author: CloudPull Team
- * Update History:
- * - 2025-01-30: Initial implementation
- */
+/*
+Database Interfaces for CloudPull State Management
+
+Features:
+- Common interface for database operations
+- Support for both DB and Transaction contexts
+- Type-safe database operations
+
+Author: CloudPull Team
+Update History:
+- 2025-01-30: Initial implementation
+*/
 
 package state
 
@@ -43,7 +43,7 @@ type txWrapper struct {
 }
 
 // WithTx on a transaction just executes the function with itself.
-func (t *txWrapper) WithTx(ctx context.Context, fn func(*sqlx.Tx) error) error {
+func (t *txWrapper) WithTx(_ context.Context, fn func(*sqlx.Tx) error) error {
 	return fn(t.Tx)
 }
 

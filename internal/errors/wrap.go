@@ -64,24 +64,5 @@ func IsTemporary(err error) bool {
 
 // AsError checks if an error is of type *Error and assigns it.
 func AsError(err error, target **Error) bool {
-	if err == nil {
-		return false
-	}
-
-	e, ok := err.(*Error)
-	if ok {
-		*target = e
-		return true
-	}
-
-	// Check wrapped errors
-	type unwrapper interface {
-		Unwrap() error
-	}
-
-	if u, ok := err.(unwrapper); ok {
-		return AsError(u.Unwrap(), target)
-	}
-
-	return false
+	return errors.As(err, target)
 }

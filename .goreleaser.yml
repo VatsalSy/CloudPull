@@ -106,10 +106,8 @@ release:
   github:
     owner: VatsalSy
     name: CloudPull
-  
   draft: false
   prerelease: auto
-  
   header: |
     ## CloudPull {{ .Tag }}
 
@@ -117,7 +115,6 @@ release:
 
   footer: |
     ## Thanks!
-    
     Thanks to all contributors!
 
   name_template: "{{.ProjectName}} v{{.Version}}"
@@ -129,22 +126,17 @@ brews:
       name: homebrew-cloudpull
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
-    
     homepage: "https://github.com/VatsalSy/CloudPull"
     description: "Fast, resumable Google Drive folder synchronization tool"
     license: "MIT"
-    
     dependencies:
       - name: git
         type: optional
-    
     test: |
       system "#{bin}/cloudpull", "--version"
-    
     install: |
       bin.install "cloudpull"
 
@@ -155,10 +147,8 @@ dockers:
       - "ghcr.io/vatsalsy/cloudpull:v{{ .Major }}"
       - "ghcr.io/vatsalsy/cloudpull:v{{ .Major }}.{{ .Minor }}"
       - "ghcr.io/vatsalsy/cloudpull:latest"
-    
     dockerfile: Dockerfile
     use: buildx
-    
     build_flag_templates:
       - "--pull"
       - "--label=org.opencontainers.image.created={{.Date}}"
@@ -190,12 +180,9 @@ nfpms:
       - src: ./examples/config.yaml
         dst: /etc/cloudpull/config.yaml.example
         type: config
-      
       - src: ./LICENSE
         dst: /usr/share/licenses/cloudpull/LICENSE
-      
       - src: ./README.md
         dst: /usr/share/doc/cloudpull/README.md
-      
       - src: ./docs/
         dst: /usr/share/doc/cloudpull/

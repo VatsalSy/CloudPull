@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/VatsalSy/CloudPull/internal/app"
+	"github.com/VatsalSy/CloudPull/internal/util"
 )
 
 var syncCmd = &cobra.Command{
@@ -44,8 +46,8 @@ You can specify the folder by:
 
 var (
 	outputDir      string
-	includePattern []string
-	excludePattern []string
+	includePatterns []string
+	excludePatterns []string
 	dryRun         bool
 	noProgress     bool
 	maxDepth       int
@@ -55,9 +57,9 @@ var (
 func init() {
 	syncCmd.Flags().StringVarP(&outputDir, "output", "o", "",
 		"Output directory (default: configured sync directory)")
-	syncCmd.Flags().StringSliceVarP(&includePattern, "include", "i", []string{},
+	syncCmd.Flags().StringSliceVarP(&includePatterns, "include", "i", []string{},
 		"Include only files matching pattern (can be used multiple times)")
-	syncCmd.Flags().StringSliceVarP(&excludePattern, "exclude", "e", []string{},
+	syncCmd.Flags().StringSliceVarP(&excludePatterns, "exclude", "e", []string{},
 		"Exclude files matching pattern (can be used multiple times)")
 	syncCmd.Flags().BoolVar(&dryRun, "dry-run", false,
 		"Show what would be synced without downloading")
@@ -81,7 +83,12 @@ func runSync(cmd *cobra.Command, args []string) error {
 	}
 
 	if err := application.InitializeAuth(); err != nil {
-		return fmt.Errorf("not authenticated. Run 'cloudpull init' first")
+		return fmt.Errorf("failed to initialize authentication: %w", err)
+	}
+
+	// Check if authenticated
+	if !application.IsAuthenticated() {
+		return fmt.Errorf("not authenticated. Run 'cloudpull auth' first")
 	}
 
 	if err := application.InitializeSyncEngine(); err != nil {
@@ -116,11 +123,11 @@ func runSync(cmd *cobra.Command, args []string) error {
 	fmt.Println(color.YellowString("Sync Configuration:"))
 	fmt.Printf("  Source: Google Drive folder %s\n", folderID)
 	fmt.Printf("  Destination: %s\n", outputDir)
-	if len(includePattern) > 0 {
-		fmt.Printf("  Include: %s\n", strings.Join(includePattern, ", "))
+	if len(includePatterns) > 0 {
+		fmt.Printf("  Include: %s\n", strings.Join(includePatterns, ", "))
 	}
-	if len(excludePattern) > 0 {
-		fmt.Printf("  Exclude: %s\n", strings.Join(excludePattern, ", "))
+	if len(excludePatterns) > 0 {
+		fmt.Printf("  Exclude: %s\n", strings.Join(excludePatterns, ", "))
 	}
 	if dryRun {
 		fmt.Println(color.YellowString("  Mode: DRY RUN (no files will be downloaded)"))
@@ -146,8 +153,8 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	// Prepare sync options
 	syncOptions := &app.SyncOptions{
-		IncludePatterns: includePattern,
-		ExcludePatterns: excludePattern,
+		IncludePatterns: includePatterns,
+		ExcludePatterns: excludePatterns,
 		MaxDepth:        maxDepth,
 		DryRun:          dryRun,
 	}
@@ -249,11 +256,31 @@ func extractFolderID(input string) string {
 		parts := strings.Split(input, "/")
 		for i, part := range parts {
 			if part == "folders" && i+1 < len(parts) {
-				return parts[i+1]
+				folderID := parts[i+1]
+				// Strip any query parameters
+				if idx := strings.Index(folderID, "?"); idx != -1 {
+					folderID = folderID[:idx]
+				}
+				// Validate folder ID pattern
+				if isValidDriveID(folderID) {
+					return folderID
+				}
+				return ""
 			}
 		}
 	}
-	return input
+	// Validate if input is already a valid Drive ID
+	if isValidDriveID(input) {
+		return input
+	}
+	return ""
+}
+
+// isValidDriveID validates if a string matches the Google Drive ID pattern
+func isValidDriveID(id string) bool {
+	// Google Drive IDs are typically 10+ characters containing alphanumeric, underscore, and hyphen
+	matched, _ := regexp.MatchString(`^[a-zA-Z0-9_-]{10,}$`, id)
+	return matched
 }
 
 func selectDriveFolder() string {
@@ -315,6 +342,11 @@ func monitorSyncProgress(app *app.App, completionChan <-chan struct{}) {
 				)
 			}
 
+			// Update progress bar max if TotalFiles increased
+			if bar != nil && progress.TotalFiles > bar.GetMax64() {
+				bar.ChangeMax64(progress.TotalFiles)
+			}
+
 			// Update progress
 			if bar != nil && progress.CompletedFiles > lastFiles {
 				_ = bar.Set64(progress.CompletedFiles)
@@ -332,15 +364,3 @@ func monitorSyncProgress(app *app.App, completionChan <-chan struct{}) {
 	}
 }
 
-func formatBytes(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-}

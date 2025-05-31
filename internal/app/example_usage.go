@@ -18,6 +18,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/VatsalSy/CloudPull/internal/util"
 )
 
 // Example demonstrates complete app usage.
@@ -96,7 +98,7 @@ func Example() {
 					progress.CompletedFiles,
 					progress.TotalFiles,
 					float64(progress.CompletedFiles)/float64(progress.TotalFiles)*100,
-					formatBytes(progress.CurrentSpeed),
+					util.FormatBytes(progress.CurrentSpeed),
 				)
 			}
 		}

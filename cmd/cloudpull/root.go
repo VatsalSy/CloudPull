@@ -43,7 +43,9 @@ func init() {
 		"verbose output")
 
 	// Bind flags to viper
-	viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
+	if err := viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose")); err != nil {
+		fmt.Fprintf(os.Stderr, "Error binding flag: %v\n", err)
+	}
 
 	// Add commands
 	rootCmd.AddCommand(initCmd)
