@@ -37,7 +37,7 @@
   "empty_template": "- No changes",
   "label_extractor": [
     {
-      "pattern": "\\[(.+)\\].*",
+      "pattern": "^\\[([a-zA-Z0-9_-]+)\\]\\s*:?\\s*(.*)$",
       "target": "$1"
     }
   ],

@@ -8,12 +8,12 @@ token_file: ""        # Path to stored auth token (auto-generated)
 # Sync settings
 sync:
   default_directory: "~/CloudPull"  # Default directory for downloads
-  max_concurrent: 3                 # Maximum concurrent downloads
+  max_concurrent: 10                # Maximum concurrent downloads
   chunk_size: "1MB"                 # Download chunk size (256KB, 512KB, 1MB, 2MB, 4MB)
   bandwidth_limit: 0                # Bandwidth limit in MB/s (0 = unlimited)
   resume_on_failure: true           # Automatically resume failed downloads
   retry_attempts: 3                 # Number of retry attempts for failed downloads
-  retry_delay: 5                    # Delay between retries in seconds
+  retry_delay: 2                    # Delay between retries in seconds
 
 # File handling
 files:

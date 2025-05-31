@@ -124,24 +124,32 @@ CREATE INDEX IF NOT EXISTS idx_errors_item_id ON error_log(item_id);
 -- Triggers for updated_at
 CREATE TRIGGER IF NOT EXISTS update_sessions_timestamp 
     AFTER UPDATE ON sessions
+    FOR EACH ROW
+    WHEN NEW.updated_at = OLD.updated_at
     BEGIN
         UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
     END;
 
 CREATE TRIGGER IF NOT EXISTS update_folders_timestamp 
     AFTER UPDATE ON folders
+    FOR EACH ROW
+    WHEN NEW.updated_at = OLD.updated_at
     BEGIN
         UPDATE folders SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
     END;
 
 CREATE TRIGGER IF NOT EXISTS update_files_timestamp 
     AFTER UPDATE ON files
+    FOR EACH ROW
+    WHEN NEW.updated_at = OLD.updated_at
     BEGIN
         UPDATE files SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
     END;
 
 CREATE TRIGGER IF NOT EXISTS update_config_timestamp 
     AFTER UPDATE ON config
+    FOR EACH ROW
+    WHEN NEW.updated_at = OLD.updated_at
     BEGIN
         UPDATE config SET updated_at = CURRENT_TIMESTAMP WHERE key = NEW.key;
     END;
@@ -157,10 +165,10 @@ SELECT
     s.completed_files,
     s.failed_files,
     s.skipped_files,
-    ROUND(CAST(s.completed_files AS FLOAT) / NULLIF(s.total_files, 0) * 100, 2) as progress_percent,
+    COALESCE(ROUND(CAST(s.completed_files AS FLOAT) / NULLIF(s.total_files, 0) * 100, 2), 0) as progress_percent,
     s.total_bytes,
     s.completed_bytes,
-    ROUND(CAST(s.completed_bytes AS FLOAT) / NULLIF(s.total_bytes, 0) * 100, 2) as bytes_progress_percent,
+    COALESCE(ROUND(CAST(s.completed_bytes AS FLOAT) / NULLIF(s.total_bytes, 0) * 100, 2), 0) as bytes_progress_percent,
     s.start_time,
     s.end_time,
     CASE 
