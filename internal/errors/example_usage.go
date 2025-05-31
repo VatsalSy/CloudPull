@@ -161,7 +161,7 @@ func ExampleAPICallWithQuotaHandling(ctx context.Context) error {
 			if i >= quotaPolicy.MaxAttempts {
 				break
 			}
-			backoff = quotaPolicy.CalculateBackoff(i)
+			backoff = calculateBackoff(i, quotaPolicy.InitialDelay, quotaPolicy.MaxDelay, quotaPolicy.Multiplier, quotaPolicy.Jitter)
 		} else {
 			// Record error for adaptive backoff
 			adaptiveBackoff.RecordError(apiErr.Type)
