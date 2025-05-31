@@ -14,6 +14,9 @@ import (
   "context"
   "fmt"
   "log"
+  "os"
+  "os/signal"
+  "syscall"
   "time"
   
   "github.com/VatsalSy/CloudPull/internal/api"
@@ -28,7 +31,14 @@ func ExampleBasicSync() {
   ctx := context.Background()
   
   // Initialize dependencies
-  driveService := &drive.Service{} // Initialize with OAuth2
+  // NOTE: In a real application, you would initialize the Drive service with proper OAuth2 credentials
+  // driveService, err := drive.NewService(ctx, option.WithCredentials(creds))
+  // if err != nil {
+  //   log.Fatal("Failed to create Drive service:", err)
+  // }
+  // For this example, we'll use a placeholder - replace with actual Drive service
+  var driveService *drive.Service // This should be properly initialized with OAuth2
+  
   rateLimiter := api.NewRateLimiter(10, 100) // 10 req/s, burst 100
   logger := logger.New(logger.Config{Level: "info"})
   
@@ -65,11 +75,12 @@ func ExampleBasicSync() {
   go monitorProgress(engine)
   
   // Wait for completion or user interrupt
-  // In a real application, you would handle signals
-  time.Sleep(24 * time.Hour)
+  waitForInterrupt()
   
-  // Stop engine
+  // Stop engine gracefully
+  log.Println("Stopping sync engine...")
   engine.Stop()
+  log.Println("Sync engine stopped")
 }
 
 // ExampleResumeSync demonstrates resuming a sync session
@@ -81,7 +92,11 @@ func ExampleResumeSync() {
   // Resume existing session
   sessionID := "previous-session-id"
   
-  engine, _ := NewEngine(nil, nil, nil, nil, nil) // with proper dependencies
+  // NOTE: Initialize with proper dependencies in real usage
+  engine, err := NewEngine(nil, nil, nil, nil, nil) // Replace nil with actual dependencies
+  if err != nil {
+    log.Fatal("Failed to create engine:", err)
+  }
   
   if err := engine.ResumeSession(ctx, sessionID); err != nil {
     log.Fatal("Failed to resume sync:", err)
@@ -119,12 +134,16 @@ func ExampleAdvancedSync() {
   }
   
   // Create engine with custom config
-  engine, _ := NewEngine(nil, nil, nil, nil, config) // with proper dependencies
+  engine, err := NewEngine(nil, nil, nil, nil, config) // Replace nil with actual dependencies
+  if err != nil {
+    log.Fatal("Failed to create engine with custom config:", err)
+  }
   
   // Set bandwidth limit (1MB/s)
   engine.progressTracker.SetBandwidthLimit(1024 * 1024)
   
   // Start sync
+  // TODO: Add actual sync logic here
   _ = engine
 }
 
@@ -196,7 +215,10 @@ func ExampleCustomWalker() {
     ExcludePatterns: []string{"node_modules", "__pycache__"},
   }
   
-  walker, _ := NewFolderWalker(nil, nil, nil, nil, config) // with proper dependencies
+  walker, err := NewFolderWalker(nil, nil, nil, nil, config) // Replace nil with actual dependencies
+  if err != nil {
+    log.Fatal("Failed to create walker:", err)
+  }
   
   // Start walking
   resultChan, err := walker.Walk(ctx, "root-folder-id", "session-id")
@@ -233,7 +255,10 @@ func ExampleDownloadManager() {
     VerifyChecksums: true,
   }
   
-  manager, _ := NewDownloadManager(nil, nil, nil, nil, nil, config) // with proper dependencies
+  manager, err := NewDownloadManager(nil, nil, nil, nil, nil, config) // Replace nil with actual dependencies
+  if err != nil {
+    log.Fatal("Failed to create download manager:", err)
+  }
   
   // Start manager
   if err := manager.Start(ctx); err != nil {
@@ -262,4 +287,14 @@ func ExampleDownloadManager() {
       stats.CompletedDownloads,
       stats.FailedDownloads)
   }
+}
+
+// waitForInterrupt waits for an interrupt signal (SIGINT or SIGTERM)
+func waitForInterrupt() {
+  sigChan := make(chan os.Signal, 1)
+  signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+  
+  // Wait for signal
+  sig := <-sigChan
+  log.Printf("Received signal: %v\n", sig)
 }

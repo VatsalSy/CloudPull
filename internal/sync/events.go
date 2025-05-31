@@ -18,8 +18,11 @@ package sync
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
+	
+	"github.com/VatsalSy/CloudPull/internal/logger"
 )
 
 // EventType defines the type of sync event.
@@ -115,6 +118,7 @@ type EventBus struct {
 	wg             sync.WaitGroup
 	bufferSize     int
 	mu             sync.RWMutex
+	logger         *logger.Logger
 }
 
 // HandlerInfo contains handler metadata.
@@ -139,6 +143,7 @@ func NewEventBus(bufferSize int) *EventBus {
 		bufferSize:     bufferSize,
 		ctx:            ctx,
 		cancel:         cancel,
+		logger:         logger.Global(),
 	}
 }
 
@@ -339,14 +344,16 @@ func (eb *EventBus) sendToChannels(event Event) {
 
 // processHandlers processes event handlers.
 func (eb *EventBus) processHandlers(event Event) {
+	// Copy handlers to avoid holding lock during execution
+	var handlersToCall []HandlerInfo
+	
 	eb.mu.RLock()
-	defer eb.mu.RUnlock()
-
 	// Process type-specific handlers
 	if handlers, exists := eb.handlers[event.Type]; exists {
 		for _, info := range handlers {
 			if info.Filter == nil || info.Filter(event) {
-				eb.callHandler(info.Handler, event)
+				// Make a copy to avoid race conditions
+				handlersToCall = append(handlersToCall, info)
 			}
 		}
 	}
@@ -354,8 +361,15 @@ func (eb *EventBus) processHandlers(event Event) {
 	// Process global handlers
 	for _, info := range eb.globalHandlers {
 		if info.Filter == nil || info.Filter(event) {
-			eb.callHandler(info.Handler, event)
+			// Make a copy to avoid race conditions
+			handlersToCall = append(handlersToCall, info)
 		}
+	}
+	eb.mu.RUnlock()
+	
+	// Call handlers without holding the lock
+	for _, info := range handlersToCall {
+		eb.callHandler(info.Handler, event)
 	}
 }
 
@@ -364,7 +378,13 @@ func (eb *EventBus) callHandler(handler EventHandler, event Event) {
 	defer func() {
 		if r := recover(); r != nil {
 			// Log panic but don't crash
-			// TODO: Add logging
+			if eb.logger != nil {
+				eb.logger.Error(fmt.Errorf("panic in event handler: %v", r), 
+					"Event handler panicked",
+					"event_type", event.Type.String(),
+					"panic", r,
+				)
+			}
 		}
 	}()
 
