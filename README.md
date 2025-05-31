@@ -363,7 +363,7 @@ make build
 ## FAQ
 
 **Q: How do I find my Google Drive folder ID?**
-A: Open the folder in Google Drive web interface. The ID is in the URL: `https://drive.google.com/drive/folders/FOLDER_ID_HERE`
+A: Open the folder in the Google Drive web interface. The ID is in the URL: `https://drive.google.com/drive/folders/FOLDER_ID_HERE`
 
 **Q: Can I sync multiple folders?**
 A: Yes, run multiple sync commands with different folder IDs and destinations.
