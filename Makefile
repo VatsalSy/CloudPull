@@ -51,8 +51,14 @@ test-build: ## Test if the project builds without creating artifacts
 .PHONY: install
 install: build ## Install CloudPull to GOPATH/bin
 	@echo "Installing CloudPull..."
-	@cp $(BUILD_DIR)/$(BINARY_NAME) $(GOPATH)/bin/
-	@echo "CloudPull installed to $(GOPATH)/bin/$(BINARY_NAME)"
+	@if [ -z "$(GOPATH)" ]; then \
+		INSTALL_PATH=$$(go env GOPATH)/bin; \
+	else \
+		INSTALL_PATH=$(GOPATH)/bin; \
+	fi; \
+	mkdir -p $$INSTALL_PATH && \
+	cp $(BUILD_DIR)/$(BINARY_NAME) $$INSTALL_PATH/ && \
+	echo "CloudPull installed to $$INSTALL_PATH/$(BINARY_NAME)"
 
 .PHONY: run
 run: ## Run CloudPull directly
@@ -184,7 +190,11 @@ dev-init: ## Initialize development environment
 	@echo "Initializing development environment..."
 	@mkdir -p ~/.cloudpull
 	@echo "Creating example config..."
-	@cp -n examples/config.yaml ~/.cloudpull/config.yaml || true
+	@if [ ! -f ~/.cloudpull/config.yaml ]; then \
+		cp examples/config.yaml ~/.cloudpull/config.yaml && echo "Config file created successfully"; \
+	else \
+		echo "Config file already exists, skipping..."; \
+	fi
 	@echo "Development environment ready"
 
 .PHONY: dev-auth
@@ -227,9 +237,16 @@ release: ## Create a new release
 		echo "VERSION is not set. Use: make release VERSION=v1.0.0"; \
 		exit 1; \
 	fi
-	git tag -a $(VERSION) -m "Release $(VERSION)"
-	git push origin $(VERSION)
-	goreleaser release --rm-dist
+	@echo "Running goreleaser..."
+	@if goreleaser release --rm-dist; then \
+		echo "Goreleaser succeeded, creating and pushing tag..."; \
+		git tag -a $(VERSION) -m "Release $(VERSION)"; \
+		git push origin $(VERSION); \
+		echo "Release $(VERSION) completed successfully"; \
+	else \
+		echo "Goreleaser failed, aborting release"; \
+		exit 1; \
+	fi
 
 # Database management
 

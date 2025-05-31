@@ -1,12 +1,10 @@
-/**
- * Helper Functions for CloudPull State Package
- *
- * Features:
- * - Null type helpers for database operations
- *
- * Author: CloudPull Team
- * Updated: 2025-01-30
- */
+// Helper Functions for CloudPull State Package
+//
+// Features:
+// - Null type helpers for database operations
+//
+// Author: CloudPull Team
+// Updated: 2025-01-30
 
 package state
 

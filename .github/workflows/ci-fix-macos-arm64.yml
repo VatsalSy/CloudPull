@@ -1,4 +1,4 @@
-name: CI
+name: CI - Cross-Platform with macOS ARM64
 
 on:
   push:
@@ -41,7 +41,7 @@ jobs:
           go mod verify
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v6
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           args: --config=.golangci.yml --timeout=5m
