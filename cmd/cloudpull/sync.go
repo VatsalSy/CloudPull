@@ -44,13 +44,13 @@ You can specify the folder by:
 }
 
 var (
-	outputDir      string
+	outputDir       string
 	includePatterns []string
 	excludePatterns []string
-	dryRun         bool
-	noProgress     bool
-	maxDepth       int
-	noConfirm      bool
+	dryRun          bool
+	noProgress      bool
+	maxDepth        int
+	noConfirm       bool
 )
 
 func init() {
@@ -225,48 +225,48 @@ func runSync(cmd *cobra.Command, args []string) error {
 					completionReceived = true
 				}
 			}
-	case sig := <-sigChan:
-		fmt.Printf("\n%s Received signal: %v\n", color.YellowString("⚠️"), sig)
-		fmt.Println("Cleaning up sync session...")
-		
-		// Cancel the context to stop the sync
-		cancel()
-		
-		// Force exit after timeout to prevent hanging
-		go func() {
-			time.Sleep(10 * time.Second)
-			fmt.Println("Force exit due to shutdown timeout")
-			os.Exit(1)
-		}()
-		
-		// Clean up the session
-		if sessionID != "" {
-			if err := application.CleanupSession(sessionID); err != nil {
-				fmt.Printf("%s Failed to clean up session: %v\n", color.RedString("❌"), err)
-			} else {
-				fmt.Println(color.GreenString("✓ Session cleaned up"))
-			}
-		}
-		
-		// Wait for progress monitoring to finish with timeout
-		if !noProgress && !dryRun {
-			select {
-			case <-progressDone:
-				// Progress monitoring finished
-			case <-time.After(5 * time.Second):
-				// Timeout waiting for progress monitoring
-				fmt.Println("Progress monitoring timeout")
-			}
-		}
-		
-			return fmt.Errorf("sync interrupted by user")
-			}
-		}
-		
-		// Sync completed successfully
-		fmt.Println(color.GreenString("\n✅ Sync completed successfully!"))
+		case sig := <-sigChan:
+			fmt.Printf("\n%s Received signal: %v\n", color.YellowString("⚠️"), sig)
+			fmt.Println("Cleaning up sync session...")
 
-		return nil
+			// Cancel the context to stop the sync
+			cancel()
+
+			// Force exit after timeout to prevent hanging
+			go func() {
+				time.Sleep(10 * time.Second)
+				fmt.Println("Force exit due to shutdown timeout")
+				os.Exit(1)
+			}()
+
+			// Clean up the session
+			if sessionID != "" {
+				if err := application.CleanupSession(sessionID); err != nil {
+					fmt.Printf("%s Failed to clean up session: %v\n", color.RedString("❌"), err)
+				} else {
+					fmt.Println(color.GreenString("✓ Session cleaned up"))
+				}
+			}
+
+			// Wait for progress monitoring to finish with timeout
+			if !noProgress && !dryRun {
+				select {
+				case <-progressDone:
+					// Progress monitoring finished
+				case <-time.After(5 * time.Second):
+					// Timeout waiting for progress monitoring
+					fmt.Println("Progress monitoring timeout")
+				}
+			}
+
+			return fmt.Errorf("sync interrupted by user")
+		}
+	}
+
+	// Sync completed successfully
+	fmt.Println(color.GreenString("\n✅ Sync completed successfully!"))
+
+	return nil
 }
 
 func extractFolderID(input string) string {
@@ -325,7 +325,7 @@ func monitorSyncProgress(app *app.App, completionChan <-chan struct{}) {
 
 	var bar *progressbar.ProgressBar
 	lastFiles := int64(0)
-	
+
 	// Create a copy of the completion channel to avoid consuming it
 	done := make(chan struct{})
 	go func() {
@@ -386,4 +386,3 @@ func monitorSyncProgress(app *app.App, completionChan <-chan struct{}) {
 		}
 	}
 }
-

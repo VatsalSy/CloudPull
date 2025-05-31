@@ -4,8 +4,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/cloudpull.git
-cd cloudpull
+git clone https://github.com/VatsalSy/CloudPull.git
+cd CloudPull
 
 # Build and install
 make install
