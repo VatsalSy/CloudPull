@@ -71,17 +71,27 @@ type BatchProcessor struct {
 	wg          sync.WaitGroup
 	mu          sync.Mutex
 	processing  bool
+	workers     chan struct{}
+	jobs        chan BatchRequest
 }
 
 // NewBatchProcessor creates a new batch processor.
 func NewBatchProcessor(service *drive.Service, rateLimiter *RateLimiter, log *logger.Logger) *BatchProcessor {
-	return &BatchProcessor{
+	bp := &BatchProcessor{
 		service:     service,
 		rateLimiter: rateLimiter,
 		logger:      log,
 		queue:       make([]BatchRequest, 0),
 		results:     make(chan BatchResponse, maxBatchSize),
+		jobs:        make(chan BatchRequest, maxBatchSize),
 	}
+	
+	// Start worker pool
+	ctx, cancel := context.WithCancel(context.Background())
+	bp.cancel = cancel
+	bp.startWorkerPool(ctx)
+	
+	return bp
 }
 
 // AddRequest adds a request to the batch queue.
@@ -132,18 +142,22 @@ func (bp *BatchProcessor) processQueue(ctx context.Context) error {
 	}()
 
 	for {
-		batch := bp.dequeueBatch()
-		if len(batch) == 0 {
-			break
-		}
+		select {
+		case <-ctx.Done():
+			bp.logger.Info("Context cancelled, stopping queue processing")
+			return ctx.Err()
+		default:
+			batch := bp.dequeueBatch()
+			if len(batch) == 0 {
+				return nil
+			}
 
-		if err := bp.processBatch(ctx, batch); err != nil {
-			bp.logger.Error(err, "Failed to process batch")
-			// Continue processing other batches
+			if err := bp.processBatch(ctx, batch); err != nil {
+				bp.logger.Error(err, "Failed to process batch")
+				// Continue processing other batches
+			}
 		}
 	}
-
-	return nil
 }
 
 // dequeueBatch removes up to maxBatchSize requests from the queue.
@@ -166,7 +180,55 @@ func (bp *BatchProcessor) dequeueBatch() []BatchRequest {
 	return batch
 }
 
-// processBatch processes a batch of requests concurrently.
+// startWorkerPool starts the worker pool for processing batch requests.
+func (bp *BatchProcessor) startWorkerPool(ctx context.Context) {
+	for i := 0; i < maxConcurrentRequests; i++ {
+		bp.wg.Add(1)
+		go bp.worker(ctx)
+	}
+}
+
+// worker processes batch requests from the jobs channel.
+func (bp *BatchProcessor) worker(ctx context.Context) {
+	defer bp.wg.Done()
+	
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case req, ok := <-bp.jobs:
+			if !ok {
+				return
+			}
+			
+			// Create context with timeout for this request
+			reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			
+			// Wait for rate limit
+			if err := bp.rateLimiter.Wait(reqCtx); err != nil {
+				bp.handleBatchResponse(req, nil, err)
+				cancel()
+				continue
+			}
+			
+			// Execute request based on type
+			switch req.Type {
+			case BatchGetMetadata:
+				bp.executeMetadataRequest(reqCtx, req)
+			case BatchGetPermissions:
+				bp.executePermissionsRequest(reqCtx, req)
+			case BatchGetRevisions:
+				bp.executeRevisionsRequest(reqCtx, req)
+			default:
+				bp.logger.Warn("Unknown batch request type", "type", req.Type)
+			}
+			
+			cancel()
+		}
+	}
+}
+
+// processBatch processes a batch of requests using the worker pool.
 func (bp *BatchProcessor) processBatch(ctx context.Context, batch []BatchRequest) error {
 	bp.logger.Debug("Processing batch", "size", len(batch))
 
@@ -174,49 +236,17 @@ func (bp *BatchProcessor) processBatch(ctx context.Context, batch []BatchRequest
 	batchCtx, cancel := context.WithTimeout(ctx, batchTimeout)
 	defer cancel()
 
-	// Create semaphore for concurrency control
-	sem := make(chan struct{}, maxConcurrentRequests)
-
-	// Process requests concurrently
-	var wg sync.WaitGroup
+	// Send requests to worker pool
 	for _, req := range batch {
-		wg.Add(1)
-		go func(r BatchRequest) {
-			defer wg.Done()
-
-			// Acquire semaphore
-			select {
-			case sem <- struct{}{}:
-				defer func() { <-sem }()
-			case <-batchCtx.Done():
-				bp.handleBatchResponse(r, nil, batchCtx.Err())
-				return
-			}
-
-			// Wait for rate limit
-			if err := bp.rateLimiter.Wait(batchCtx); err != nil {
-				bp.handleBatchResponse(r, nil, err)
-				return
-			}
-
-			// Execute request based on type
-			switch r.Type {
-			case BatchGetMetadata:
-				bp.executeMetadataRequest(batchCtx, r)
-			case BatchGetPermissions:
-				bp.executePermissionsRequest(batchCtx, r)
-			case BatchGetRevisions:
-				bp.executeRevisionsRequest(batchCtx, r)
-			default:
-				bp.logger.Warn("Unknown batch request type", "type", r.Type)
-			}
-		}(req)
+		select {
+		case <-batchCtx.Done():
+			return batchCtx.Err()
+		case bp.jobs <- req:
+			// Request sent to worker
+		}
 	}
 
-	// Wait for all requests to complete
-	wg.Wait()
-
-	bp.logger.Debug("Batch processed successfully", "size", len(batch))
+	bp.logger.Debug("Batch dispatched to workers", "size", len(batch))
 	return nil
 }
 
@@ -301,7 +331,10 @@ func (bp *BatchProcessor) Stop() error {
 	}
 	bp.mu.Unlock()
 
-	// Wait for processing to complete
+	// Close jobs channel to signal workers to stop
+	close(bp.jobs)
+	
+	// Wait for all workers to complete
 	bp.wg.Wait()
 
 	// Close results channel

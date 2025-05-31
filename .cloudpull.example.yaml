@@ -2,8 +2,8 @@
 # Copy this file to ~/.cloudpull/config.yaml and modify as needed
 
 # Authentication settings
-credentials_file: ""  # Path to OAuth2 credentials JSON
-token_file: ""        # Path to stored auth token (auto-generated)
+credentials_file: ""  # Path to OAuth2 credentials JSON file obtained from Google Cloud Console (e.g., ~/client_secret.json)
+token_file: ""        # Path where auth token will be automatically stored after first successful authentication (e.g., ~/.cloudpull/token.json)
 
 # Sync settings
 sync:

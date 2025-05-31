@@ -114,7 +114,7 @@ func (rl *RateLimiter) waitWithLimiter(ctx context.Context, limiter *rate.Limite
 	
 	// Check if reservation was successful
 	if !reservation.OK() {
-		return errors.New("rate limiter reservation failed")
+		return errors.New(errors.ErrorTypeAPI, "rate_limit_reservation_failed", "rate limiter reservation failed", nil)
 	}
 	
 	delay := reservation.Delay()
