@@ -1,0 +1,45 @@
+# CloudPull Configuration Example
+# Copy this file to ~/.cloudpull/config.yaml and modify as needed
+
+# Authentication settings
+credentials_file: ""  # Path to OAuth2 credentials JSON file obtained from Google Cloud Console (e.g., ~/client_secret.json)
+token_file: ""        # Path where auth token will be automatically stored after first successful authentication (e.g., ~/.cloudpull/token.json)
+
+# Sync settings
+sync:
+  default_directory: "~/CloudPull"  # Default directory for downloads
+  max_concurrent: 10                # Maximum concurrent downloads
+  chunk_size: "1MB"                 # Download chunk size (256KB, 512KB, 1MB, 2MB, 4MB)
+  bandwidth_limit: 0                # Bandwidth limit in MB/s (0 = unlimited)
+  resume_on_failure: true           # Automatically resume failed downloads
+  retry_attempts: 3                 # Number of retry attempts for failed downloads
+  retry_delay: 2                    # Delay between retries in seconds
+
+# File handling
+files:
+  skip_duplicates: true             # Skip files that already exist locally
+  preserve_timestamps: true         # Preserve original file timestamps
+  follow_shortcuts: false           # Follow Google Drive shortcuts
+  convert_google_docs: true         # Convert Google Docs to local formats
+  google_docs_format: "pdf"         # Format for Google Docs (pdf, docx, txt)
+  ignore_patterns:                  # Patterns to ignore during sync
+    - "*.tmp"
+    - "~$*"
+    - ".DS_Store"
+    - "Thumbs.db"
+
+# Cache settings
+cache:
+  enabled: true                     # Enable metadata caching
+  directory: "~/.cloudpull/cache"   # Cache directory
+  ttl: 60                          # Cache time-to-live in minutes
+  max_size: 100                    # Maximum cache size in MB
+
+# Logging
+log:
+  level: "info"                    # Log level (debug, info, warn, error)
+  file: ""                         # Log file path (empty = stdout only)
+  max_size: 10                     # Maximum log file size in MB
+  max_backups: 3                   # Number of backup files to keep
+  max_age: 7                       # Maximum age of log files in days
+  compress: true                   # Compress old log files

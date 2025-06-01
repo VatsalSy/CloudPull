@@ -1,0 +1,51 @@
+{
+  "categories": [
+    {
+      "title": "## 🚀 Features",
+      "labels": ["enhancement", "feature"]
+    },
+    {
+      "title": "## 🐛 Fixes",
+      "labels": ["bug", "fix"]
+    },
+    {
+      "title": "## 🧰 Maintenance",
+      "labels": ["chore", "maintenance"]
+    },
+    {
+      "title": "## 📚 Documentation",
+      "labels": ["documentation", "docs"]
+    },
+    {
+      "title": "## ⚡ Performance",
+      "labels": ["performance"]
+    },
+    {
+      "title": "## 🔒 Security",
+      "labels": ["security"]
+    }
+  ],
+  "ignore_labels": [
+    "ignore-for-release",
+    "duplicate",
+    "wontfix",
+    "invalid"
+  ],
+  "sort": "ASC",
+  "template": "${{CHANGELOG}}\n\n**Full Changelog**: ${{RELEASE_DIFF}}",
+  "pr_template": "- ${{TITLE}} by @${{AUTHOR}} in #${{NUMBER}}",
+  "empty_template": "- No changes",
+  "label_extractor": [
+    {
+      "pattern": "^\\[([a-zA-Z0-9_-]+)\\]\\s*:?\\s*(.*)$",
+      "target": "$1"
+    }
+  ],
+  "duplicate_filter": {
+    "pattern": "^(Revert|revert:).*",
+    "method": "title"
+  },
+  "reference": {
+    "pattern": ".*\\.md"
+  }
+}

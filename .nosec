@@ -1,0 +1,30 @@
+# Gosec exceptions file
+# These are intentional design decisions, not security vulnerabilities
+
+# G304: File path provided as taint input - These are validated user inputs for file operations
+internal/sync/downloader.go:425
+internal/sync/downloader.go:496
+internal/sync/downloader.go:533
+internal/sync/downloader.go:539
+internal/app/app.go:101
+internal/api/client.go:194
+internal/api/client.go:320
+internal/api/auth.go:58
+
+# G107: HTTP request with variable URL - OAuth2 flow requires dynamic URLs
+internal/api/auth.go:269
+internal/api/auth.go:283
+
+# G302: File permissions - These files need to be readable by the user
+internal/sync/downloader.go:425
+internal/logger/logger.go:403
+internal/app/app.go:101
+internal/api/client.go:194
+
+# G401/G501: MD5 usage - Used for file checksums, not security
+internal/sync/downloader.go:20
+internal/sync/downloader.go:502
+
+# G404: Math/rand for jitter - Not used for security, just retry delays
+internal/errors/retry.go:66
+internal/errors/retry.go:148

@@ -1,0 +1,188 @@
+# CloudPull GoReleaser configuration
+# https://goreleaser.com
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: cloudpull
+    main: ./cmd/cloudpull
+    binary: cloudpull
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - "7"
+    ignore:
+      - goos: windows
+        goarch: arm64
+      - goos: windows
+        goarch: arm
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+      - -X main.builtBy=goreleaser
+
+archives:
+  - id: cloudpull
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      - docs/*
+      - examples/config.yaml
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+signs:
+  - cmd: cosign
+    certificate: '${artifact}.cert'
+    args:
+      - sign-blob
+      - '--output-certificate=${certificate}'
+      - '--output-signature=${signature}'
+      - '${artifact}'
+      - '--yes'
+    artifacts: checksum
+    output: true
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+      - Merge pull request
+      - Merge remote-tracking branch
+      - Merge branch
+  groups:
+    - title: 'New Features'
+      regexp: "^feat.*"
+      order: 0
+    - title: 'Bug Fixes'
+      regexp: "^fix.*"
+      order: 1
+    - title: 'Performance Improvements'
+      regexp: "^perf.*"
+      order: 2
+    - title: 'Code Refactoring'
+      regexp: "^refactor.*"
+      order: 3
+    - title: 'Other Changes'
+      order: 999
+
+release:
+  github:
+    owner: VatsalSy
+    name: CloudPull
+  draft: false
+  prerelease: auto
+  header: |
+    ## CloudPull {{ .Tag }}
+
+    Fast, resumable Google Drive folder synchronization tool.
+
+  footer: |
+    ## Thanks!
+    Thanks to all contributors!
+
+  name_template: "{{.ProjectName}} v{{.Version}}"
+
+brews:
+  - name: cloudpull
+    tap:
+      owner: VatsalSy
+      name: homebrew-cloudpull
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    homepage: "https://github.com/VatsalSy/CloudPull"
+    description: "Fast, resumable Google Drive folder synchronization tool"
+    license: "MIT"
+    dependencies:
+      - name: git
+        type: optional
+    test: |
+      system "#{bin}/cloudpull", "--version"
+    install: |
+      bin.install "cloudpull"
+
+dockers:
+  - id: cloudpull
+    image_templates:
+      - "ghcr.io/vatsalsy/cloudpull:{{ .Tag }}"
+      - "ghcr.io/vatsalsy/cloudpull:v{{ .Major }}"
+      - "ghcr.io/vatsalsy/cloudpull:v{{ .Major }}.{{ .Minor }}"
+      - "ghcr.io/vatsalsy/cloudpull:latest"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+      - "--label=org.opencontainers.image.licenses=MIT"
+      - "--platform=linux/amd64,linux/arm64"
+
+nfpms:
+  - id: cloudpull
+    package_name: cloudpull
+    vendor: CloudPull
+    homepage: https://github.com/VatsalSy/CloudPull
+    maintainer: Vatsal Sanjay <vatsalsanjay@gmail.com>
+    description: Fast, resumable Google Drive folder synchronization tool
+    license: MIT
+    formats:
+      - deb
+      - rpm
+      - apk
+    dependencies:
+      - git
+    recommends:
+      - golang
+
+    contents:
+      - src: ./examples/config.yaml
+        dst: /etc/cloudpull/config.yaml.example
+        type: config
+      - src: ./LICENSE
+        dst: /usr/share/licenses/cloudpull/LICENSE
+      - src: ./README.md
+        dst: /usr/share/doc/cloudpull/README.md
+      - src: ./docs/
+        dst: /usr/share/doc/cloudpull/

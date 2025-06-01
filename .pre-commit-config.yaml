@@ -1,0 +1,172 @@
+# CloudPull Pre-commit Configuration
+# Automated checks before each commit
+
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+
+default_language_version:
+  golang: go1.21
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # Trim trailing whitespace
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      # Ensure files end with newline
+      - id: end-of-file-fixer
+      # Check yaml files
+      - id: check-yaml
+        args: [--unsafe]
+        exclude: ^(.github/workflows/|kubernetes/)
+      # Check json files
+      - id: check-json
+        exclude: ^(vendor/|testdata/)
+      # Check for merge conflicts
+      - id: check-merge-conflict
+      # Check for files that would conflict on case-insensitive filesystems
+      - id: check-case-conflict
+      # Check that executables have shebangs
+      - id: check-executables-have-shebangs
+      # Check that scripts with shebangs are executable
+      - id: check-shebang-scripts-are-executable
+      # Detect private keys
+      - id: detect-private-key
+        exclude: ^(testdata/|examples/)
+      # Check for large files
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+        exclude: ^(vendor/|testdata/)
+      # Fix mixed line endings
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      # Check toml files
+      - id: check-toml
+
+  # Go specific hooks
+  - repo: local
+    hooks:
+      - id: golangci-lint
+        name: golangci-lint
+        entry: scripts/hooks/golangci-lint.sh
+        types: [go]
+        language: script
+        pass_filenames: false
+        require_serial: true
+      - id: go-fmt
+        name: go fmt
+        entry: scripts/hooks/go-fmt.sh
+        language: script
+        types: [go]
+        pass_filenames: true
+
+      # Go mod tidy
+      - id: go-mod-tidy
+        name: go mod tidy
+        entry: scripts/hooks/go-mod-tidy.sh
+        language: script
+        pass_filenames: false
+        files: go.mod
+
+      # Go mod verify
+      - id: go-mod-verify
+        name: go mod verify
+        entry: go mod verify
+        language: system
+        pass_filenames: false
+        files: go.mod
+
+      # Go generate
+      - id: go-generate
+        name: go generate
+        entry: scripts/hooks/go-generate.sh
+        language: script
+        types: [go]
+        pass_filenames: false
+
+      # Go build
+      - id: go-build
+        name: go build
+        entry: scripts/hooks/go-build.sh
+        language: script
+        types: [go]
+        pass_filenames: false
+
+      # Go test
+      - id: go-test-unit
+        name: go test (unit)
+        entry: scripts/hooks/go-test.sh unit
+        language: script
+        types: [go]
+        pass_filenames: false
+        stages: [pre-push]
+
+      # Security check
+      - id: go-sec
+        name: go security check
+        entry: scripts/hooks/go-security.sh
+        language: script
+        types: [go]
+        pass_filenames: false
+
+      # Check for sensitive data
+      - id: check-sensitive
+        name: check sensitive data
+        entry: scripts/hooks/check-sensitive.sh
+        language: script
+        pass_filenames: true
+        types: [text]
+
+  # Markdown
+  - repo: https://github.com/markdownlint/markdownlint
+    rev: v0.13.0
+    hooks:
+      - id: markdownlint
+        name: markdownlint
+        entry: markdownlint
+        language: ruby
+        types: [markdown]
+        args: [-s, .markdownlint.yaml]
+        exclude: ^(vendor/|docs/api/)
+
+  # Shell scripts
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        name: shellcheck
+        types: [shell]
+        exclude: ^(vendor/)
+
+  # Dockerfile (commented out - requires Docker to be running)
+  # Uncomment this section if you have Docker installed and running
+  # - repo: https://github.com/hadolint/hadolint
+  #   rev: v2.12.0
+  #   hooks:
+  #     - id: hadolint-docker
+  #       name: hadolint
+  #       entry: hadolint
+  #       language: docker
+  #       types: [dockerfile]
+
+  # Commit message
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v3.13.0
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
+
+# Custom fail fast settings
+fail_fast: false
+
+# Exclude certain files/patterns globally
+exclude: |
+  (?x)^(
+    vendor/.*|
+    .git/.*|
+    .*\.pb\.go|
+    .*\.gen\.go|
+    testdata/.*
+  )$

@@ -1,0 +1,11 @@
+# CloudPull Test Dependencies
+# This file lists all the tools required for running the complete test suite
+
+# Go tools
+github.com/golangci/golangci-lint/cmd/golangci-lint@v1.55.2
+github.com/securego/gosec/v2/cmd/gosec@latest
+
+# Optional but recommended tools
+# github.com/fzipp/gocyclo/cmd/gocyclo@latest
+# golang.org/x/tools/cmd/deadcode@latest
+# github.com/jgautheron/goconst/cmd/goconst@latest

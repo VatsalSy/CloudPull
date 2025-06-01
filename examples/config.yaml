@@ -1,0 +1,141 @@
+# CloudPull Configuration Example
+# Copy this file to ~/.cloudpull/config.yaml and modify as needed
+
+# Google Drive settings
+google:
+  # Path to OAuth2 credentials file (downloaded from Google Cloud Console)
+  credentials_path: ~/.cloudpull/credentials.json
+
+  # Token storage path (will be created automatically)
+  token_path: ~/.cloudpull/token.json
+
+  # Export formats for Google Workspace files
+  export_formats:
+    # Google Docs → Microsoft Word
+    google-apps/document: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    # Google Sheets → Microsoft Excel
+    google-apps/spreadsheet: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+    # Google Slides → Microsoft PowerPoint
+    google-apps/presentation: application/vnd.openxmlformats-officedocument.presentationml.presentation
+    # Google Drawings → PNG
+    google-apps/drawing: image/png
+    # Google Forms → PDF
+    google-apps/form: application/pdf
+
+# Download settings
+download:
+  # Number of concurrent downloads (default: 3)
+  concurrent_downloads: 3
+
+  # Chunk size for downloads in bytes (default: 10MB)
+  chunk_size: 10485760
+
+  # Verify checksums after download (default: true)
+  verify_checksums: true
+
+  # Bandwidth limit in MB/s (0 = unlimited)
+  bandwidth_limit: 0
+
+  # Retry settings
+  max_retries: 3
+  retry_delay: 5s
+
+# Sync settings
+sync:
+  # Default output directory
+  output_dir: ~/CloudPull
+
+  # Maximum folder depth to sync (-1 = unlimited)
+  max_depth: -1
+
+  # Exclude patterns (glob patterns)
+  exclude_patterns:
+    - "*.tmp"
+    - "*.temp"
+    - "~$*"
+    - ".DS_Store"
+    - "Thumbs.db"
+    - "desktop.ini"
+    - ".git/*"
+    - ".svn/*"
+
+  # Include patterns (if specified, only these will be synced)
+  include_patterns: []
+
+  # Skip files larger than this size (in bytes, 0 = no limit)
+  max_file_size: 0
+
+  # Temporary directory for downloads
+  temp_dir: ""
+
+# State management
+state:
+  # Database file path
+  db_path: ~/.cloudpull/cloudpull.db
+
+  # Session history limit
+  max_sessions: 50
+
+  # Auto-cleanup old sessions
+  auto_cleanup: true
+  cleanup_after_days: 30
+
+# Logging settings
+logging:
+  # Log level: debug, info, warn, error
+  level: info
+
+  # Log file path (empty = stdout only)
+  file: ~/.cloudpull/cloudpull.log
+
+  # Log format: text, json
+  format: text
+
+  # Include timestamps
+  timestamps: true
+
+  # Log file rotation
+  max_size: 100  # MB
+  max_age: 30    # days
+  max_backups: 5
+
+# API settings
+api:
+  # Rate limiting
+  requests_per_second: 10
+  burst_size: 20
+
+  # Timeouts
+  timeout: 30s
+  idle_timeout: 90s
+
+# Progress display
+progress:
+  # Update interval for progress bars
+  update_interval: 100ms
+
+  # Show individual file progress
+  show_file_progress: true
+
+  # Show folder scan progress
+  show_scan_progress: true
+
+# Performance tuning
+performance:
+  # Memory settings
+  max_memory_percent: 80
+
+  # CPU settings
+  max_cpu_percent: 90
+  gomaxprocs: 0  # 0 = use all CPUs
+
+# Feature flags
+features:
+  # Enable experimental features
+  experimental: false
+
+  # Enable metrics collection
+  metrics: true
+
+  # Enable pprof endpoint
+  pprof: false

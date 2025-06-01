@@ -1,0 +1,387 @@
+# CloudPull GolangCI-Lint Configuration
+# Balanced configuration for code quality without being overly strict
+
+run:
+  # Timeout for analysis
+  timeout: 5m
+
+  # Include test files
+  tests: true
+
+  # Exit code when at least one issue was found
+  issues-exit-code: 1
+
+  # Build tags to pass to all linters
+  build-tags:
+    - integration
+
+# Output configuration
+output:
+  # Format of output
+  formats:
+    - format: colored-line-number
+
+  # Print lines of code with issue
+  print-issued-lines: true
+
+  # Print linter name in the end of issue text
+  print-linter-name: true
+
+  # Sort results by: filepath, line and column
+  sort-results: true
+
+# Linter settings
+linters-settings:
+  # Error checking
+  errcheck:
+    # Report about not checking of errors in type assertions
+    check-type-assertions: true
+
+    # Report about assignment of errors to blank identifier
+    check-blank: false  # Too strict for many cases
+
+    # Exclude certain functions where error checking isn't critical
+    exclude-functions:
+      - io/ioutil.ReadFile
+      - io.Copy(*bytes.Buffer)
+      - io.Copy(os.Stdout)
+      - (*os.File).Close
+      - (*database/sql.Rows).Close
+      - (*database/sql.Stmt).Close
+
+  # Go vet
+  govet:
+    # Enable all analyzers
+    enable-all: true
+    # Disable some overly strict checks
+    disable:
+      - fieldalignment  # Too strict for general use
+    settings:
+      printf:
+        funcs:
+          - (github.com/rs/zerolog.Logger).Printf
+
+  # Static analysis
+  staticcheck:
+    # SAxxxx checks
+    checks: ["all"]
+
+  # Style check
+  stylecheck:
+    # STxxxx checks
+    checks: ["all", "-ST1000", "-ST1003", "-ST1016", "-ST1020", "-ST1021", "-ST1022"]
+
+  # Unused variables
+  unused:
+    # Report exported fields that are unused
+    check-exported: true
+
+  # Variable naming
+  varnamelen:
+    # Maximum length of variable name
+    max-distance: 10  # Increased
+    # Minimum length of variable name
+    min-name-length: 2
+    # Check method receivers
+    check-receiver: false  # Too strict
+    # Check return values
+    check-return: false    # Too strict
+    # Check type parameters
+    check-type-param: false
+    # Ignore commonly used names
+    ignore-names:
+      - err
+      - id
+      - ok
+      - tt
+      - db
+      - tx
+      - ctx
+      - i
+      - j
+      - k
+      - v
+      - w
+      - rw
+      - r
+      - q
+      - m
+      - n
+      - p
+      - s
+      - t
+      - fs
+      - vm
+      - op
+      - lg
+
+  # Cyclomatic complexity
+  cyclop:
+    # Maximum complexity
+    max-complexity: 25  # Increased from 15
+    # Package average complexity
+    package-average: 15.0  # Increased
+    # Skip tests
+    skip-tests: true
+
+  # Function length
+  funlen:
+    # Maximum function length
+    lines: 150  # Increased from 100
+    # Maximum statements
+    statements: 80  # Increased from 50
+    # Ignore comments
+    ignore-comments: true
+
+  # Cognitive complexity
+  gocognit:
+    # Minimal cognitive complexity
+    min-complexity: 30  # Increased from 20
+
+  # Nested structs
+  goconst:
+    # Minimal length of string constant
+    min-len: 3
+    # Minimal occurrences count
+    min-occurrences: 3
+
+  # Imports
+  goimports:
+    # Put local imports after 3rd-party
+    local-prefixes: github.com/VatsalSy/CloudPull
+
+  # Line length
+  lll:
+    # Maximum line length
+    line-length: 140  # Increased from 120
+    # Tab width
+    tab-width: 4
+
+  # Misspell
+  misspell:
+    # Locale
+    locale: US
+
+  # Nesting depth
+  nestif:
+    # Maximum nesting depth
+    min-complexity: 6  # Increased from 4
+
+  # Whitespace
+  whitespace:
+    # Enforce multi-line if
+    multi-if: true
+    # Enforce multi-func
+    multi-func: true
+
+  # Error wrapping
+  wrapcheck:
+    # Packages to check for error wrapping
+    ignoreSigs:
+      - .Errorf(
+      - errors.New(
+      - errors.Unwrap(
+      - .Wrap(
+      - .Wrapf(
+      - .WithMessage(
+      - .WithMessagef(
+      - .WithStack(
+    ignorePackageGlobs:
+      - github.com/VatsalSy/CloudPull/internal/errors
+      - github.com/VatsalSy/CloudPull/internal/state
+    # Ignore interface and generated code
+    ignoreInterfaceRegexps:
+      - ^(?i)(.*)?[Cc]lose.*$
+      - ^(?i)(.*)?[Ff]lush.*$
+
+  # Documentation
+  godox:
+    # Keywords to check
+    keywords:
+      - TODO
+      - BUG
+      - FIXME
+      - HACK
+      - OPTIMIZE
+
+  # Security
+  gosec:
+    # Exclude certain rules
+    excludes:
+      - G204  # Subprocess launched with variable
+      - G304  # File path provided as taint input
+      - G404  # Insecure random number source (we use for jitter, not crypto)
+      - G501  # Imported blocklist: crypto/md5 (we use for checksums)
+      - G401  # Use of weak cryptographic primitive (same as above)
+    # Configure rules
+    config:
+      G306: "0600"  # Expect file permissions
+    severity: medium
+    confidence: medium
+
+  # Duplication
+  dupl:
+    # Threshold
+    threshold: 150
+
+# Linters configuration
+linters:
+  disable-all: true
+  enable:
+    # Essential linters
+    - errcheck       # Check error returns
+    - gosimple       # Simplify code
+    - govet          # Go vet
+    - ineffassign    # Detect ineffectual assignments
+    - staticcheck    # Staticcheck
+    # - typecheck      # Type checking (temporarily disabled due to Go 1.24 issues)
+    - unused         # Find unused code
+
+    # Code quality (reasonable settings)
+    - bodyclose      # Check HTTP body close
+    - dupl           # Code duplication
+    - gocognit       # Cognitive complexity
+    - goconst        # Find repeated strings
+    - gocritic       # Comprehensive checks
+    - gocyclo        # Cyclomatic complexity
+    - gofmt          # Go formatting
+    - goimports      # Import formatting
+    - gosec          # Security issues
+    - lll            # Line length limit
+    - misspell       # Misspellings
+    - nakedret       # Naked returns
+    - prealloc       # Preallocate slices
+    - unconvert      # Unnecessary conversions
+    - unparam        # Unused parameters
+    - varnamelen     # Variable name length
+
+    # Best practices (less strict)
+    - errorlint      # Error handling best practices
+    - exhaustive     # Exhaustive switches
+    - godox          # TODO/FIXME comments
+    - nestif         # Deeply nested ifs
+    - nilerr         # Return nil with nil error
+    - wrapcheck      # Error wrapping
+
+  # Note: We use disable-all: true, so we don't need a disable list
+  # These linters are intentionally not enabled:
+  # - cyclop, funlen, gomnd, revive, stylecheck, wsl (too strict)
+  # - depguard, forbidigo, goheader, gomodguard (project specific)
+  # - gochecknoglobals, gochecknoinits (too restrictive)
+  # - nlreturn, whitespace, godot (stylistic preferences)
+
+# Issues configuration
+issues:
+  # Maximum issues count per one linter
+  max-issues-per-linter: 50
+
+  # Maximum count of issues with same text
+  max-same-issues: 10
+
+  # Show only new issues in git
+  new: false
+
+  # Fix found issues (if it's supported by linter)
+  fix: false
+
+  # Make issues output unique by line
+  uniq-by-line: true
+
+  # Exclude certain issues
+  exclude-rules:
+    # Exclude test files from certain linters
+    - path: _test\.go
+      linters:
+        - wrapcheck
+        - dupl
+        - gocognit
+        - gocyclo
+        - goconst
+        - lll
+        - varnamelen
+
+    # Exclude cognitive complexity in tests
+    - path: _test\.go
+      linters:
+        - gocognit
+        - gocyclo
+
+    # Allow TODO comments in certain files
+    - path: "(cmd|internal)/.+\\.go"
+      linters:
+        - godox
+      text: "TODO"
+
+    # Allow longer lines in certain files
+    - path: "(client|api|internal/api)/.+\\.go"
+      linters:
+        - lll
+
+    # Exclude certain secure random issues for non-crypto usage
+    - path: "internal/errors/retry\\.go"
+      linters:
+        - gosec
+      text: "G404"
+
+    # Allow md5 for file checksums (not crypto)
+    - path: "internal/sync/downloader\\.go"
+      linters:
+        - gosec
+      text: "(G401|G501)"
+
+    # Exclude variable length issues for common patterns
+    - linters:
+        - varnamelen
+      text: "^(parameter|variable) name '(ctx|id|db|tx|log|cfg|app|api|err|req|res|msg|cmd|arg|opt|fn|cb)' is too short"
+
+    # Allow shadowing err in short scopes
+    - linters:
+        - govet
+      text: 'shadow: declaration of "err" shadows declaration'
+      source: 'if err :='
+
+    # Exclude example and generated files
+    - path: "(example|mock).*\\.go"
+      linters:
+        - errcheck
+        - ineffassign
+        - gosec
+        - gocognit
+
+    # Allow HTTP requests with variable URLs in auth
+    - path: "internal/api/auth\\.go"
+      linters:
+        - gosec
+      text: "G107"
+
+  # Exclude some directories from all linters
+  exclude-dirs:
+    - vendor
+    - testdata
+    - .git
+    - dist
+    - build
+    - examples
+
+  # Exclude some files from all linters
+  exclude-files:
+    - ".*\\.pb\\.go$"
+    - ".*\\.gen\\.go$"
+    - "mock_.*\\.go$"
+
+# Severity configuration
+severity:
+  # Set default severity
+  default-severity: warning
+
+  # Per linter severity
+  rules:
+    - linters:
+        - gosec
+      severity: error
+    - linters:
+        - errcheck
+      severity: error
+    - linters:
+        - godox
+      severity: info
