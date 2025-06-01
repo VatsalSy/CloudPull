@@ -116,7 +116,7 @@ for _, fileId := range fileIds {
 batch.Do()
 ```
 
-2. **Partial Response**
+1. **Partial Response**
 
 Always use `fields` parameter:
 
@@ -124,7 +124,7 @@ Always use `fields` parameter:
 fields=files(id,name,size,md5Checksum,mimeType,parents,modifiedTime)
 ```
 
-3. **Change Detection**
+1. **Change Detection**
 
 Use `modifiedTime` and `md5Checksum` to skip unchanged files
 

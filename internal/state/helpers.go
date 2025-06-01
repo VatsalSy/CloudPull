@@ -21,6 +21,14 @@ func NewNullString(s string) sql.NullString {
 	}
 }
 
+// NewNullStringAllowEmpty creates a sql.NullString that treats empty strings as valid.
+func NewNullStringAllowEmpty(s string) sql.NullString {
+	return sql.NullString{
+		String: s,
+		Valid:  true,
+	}
+}
+
 // NewNullTime creates a valid sql.NullTime.
 func NewNullTime(t time.Time) sql.NullTime {
 	return sql.NullTime{

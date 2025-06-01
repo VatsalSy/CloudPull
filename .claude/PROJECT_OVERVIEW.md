@@ -2,7 +2,9 @@
 
 ## Project Overview
 
-CloudPull is a high-performance, resumable Google Drive synchronization tool written in Go. It provides rsync-like functionality for downloading large folder structures from Google Drive to local storage.
+CloudPull is a high-performance, resumable Google Drive synchronization tool written in Go.
+It provides rsync-like functionality for downloading large folder structures from Google Drive
+to local storage.
 
 ## Key Features
 
