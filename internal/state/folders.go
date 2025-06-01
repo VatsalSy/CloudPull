@@ -47,7 +47,8 @@ func (s *FolderStore) Create(ctx context.Context, folder *Folder) error {
 	}
 	defer stmt.Close()
 
-	err = stmt.QueryRowContext(ctx, folder).Scan(
+	row := stmt.QueryRowxContext(ctx, folder)
+	err = row.Scan(
 		&folder.ID,
 		&folder.CreatedAt,
 		&folder.UpdatedAt,
@@ -80,7 +81,8 @@ func (s *FolderStore) CreateBatch(ctx context.Context, folders []*Folder) error 
 		defer stmt.Close()
 
 		for _, folder := range folders {
-			err = stmt.QueryRowContext(ctx, folder).Scan(
+			row := stmt.QueryRowxContext(ctx, folder)
+			err = row.Scan(
 				&folder.ID,
 				&folder.CreatedAt,
 				&folder.UpdatedAt,

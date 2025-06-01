@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -37,6 +38,9 @@ const (
 
 	// Token refresh buffer (refresh 5 minutes before expiry).
 	tokenRefreshBuffer = 5 * time.Minute
+
+	// HTTP client timeout for all requests.
+	httpTimeout = 30 * time.Second
 )
 
 // AuthManager handles OAuth2 authentication for Google Drive.
@@ -103,7 +107,10 @@ func (am *AuthManager) GetClient(ctx context.Context) (*http.Client, error) {
 	}
 
 	am.token = token
-	am.httpClient = am.config.Client(ctx, token)
+	// Create HTTP client with consistent timeout
+	httpClient := am.config.Client(ctx, token)
+	httpClient.Timeout = httpTimeout
+	am.httpClient = httpClient
 	return am.httpClient, nil
 }
 
@@ -131,7 +138,7 @@ func (am *AuthManager) getToken(ctx context.Context) (*oauth2.Token, error) {
 	}
 
 	// No valid token found, authentication needs to be handled by caller
-	return nil, errors.NewSimple("authentication required")
+	return nil, errors.Wrap(err, "authentication required")
 }
 
 // loadToken loads token from file.
@@ -223,6 +230,12 @@ func (am *AuthManager) ExchangeAuthCode(ctx context.Context, authCode string) (*
 		am.logger.Warn("Failed to save token", "error", err)
 	}
 
+	// Update in-memory token and HTTP client
+	am.token = token
+	httpClient := am.config.Client(ctx, token)
+	httpClient.Timeout = httpTimeout
+	am.httpClient = httpClient
+
 	am.logger.Info("Authentication successful")
 	return token, nil
 }
@@ -263,16 +276,29 @@ func (am *AuthManager) RevokeToken(ctx context.Context) error {
 		return errors.Wrap(err, "no token to revoke")
 	}
 
+	// Create HTTP client with timeout for revocation requests
+	httpClient := &http.Client{
+		Timeout: httpTimeout,
+	}
+
 	// Revoke access token
 	if token.AccessToken != "" {
 		revokeURL := fmt.Sprintf("https://oauth2.googleapis.com/revoke?token=%s", token.AccessToken)
-		resp, err := http.Post(revokeURL, "application/x-www-form-urlencoded", nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, revokeURL, nil)
 		if err != nil {
-			am.logger.Warn("Failed to revoke access token", "error", err)
+			am.logger.Warn("Failed to create access token revocation request", "error", err)
 		} else {
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
-				am.logger.Warn("Failed to revoke access token", "status", resp.StatusCode)
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			resp, err := httpClient.Do(req)
+			if err != nil {
+				am.logger.Warn("Failed to revoke access token", "error", err)
+			} else {
+				defer resp.Body.Close()
+				if resp.StatusCode != http.StatusOK {
+					// Read response body for error details
+					bodyBytes, _ := io.ReadAll(resp.Body)
+					am.logger.Warn("Failed to revoke access token", "status", resp.StatusCode, "response", string(bodyBytes))
+				}
 			}
 		}
 	}
@@ -280,13 +306,21 @@ func (am *AuthManager) RevokeToken(ctx context.Context) error {
 	// Revoke refresh token
 	if token.RefreshToken != "" {
 		revokeURL := fmt.Sprintf("https://oauth2.googleapis.com/revoke?token=%s", token.RefreshToken)
-		resp, err := http.Post(revokeURL, "application/x-www-form-urlencoded", nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, revokeURL, nil)
 		if err != nil {
-			am.logger.Warn("Failed to revoke refresh token", "error", err)
+			am.logger.Warn("Failed to create refresh token revocation request", "error", err)
 		} else {
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
-				am.logger.Warn("Failed to revoke refresh token", "status", resp.StatusCode)
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			resp, err := httpClient.Do(req)
+			if err != nil {
+				am.logger.Warn("Failed to revoke refresh token", "error", err)
+			} else {
+				defer resp.Body.Close()
+				if resp.StatusCode != http.StatusOK {
+					// Read response body for error details
+					bodyBytes, _ := io.ReadAll(resp.Body)
+					am.logger.Warn("Failed to revoke refresh token", "status", resp.StatusCode, "response", string(bodyBytes))
+				}
 			}
 		}
 	}

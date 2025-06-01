@@ -17,6 +17,21 @@ Fast, resumable Google Drive folder synchronization tool with rsync-like functio
 - 📈 **Bandwidth Control**: Configurable rate limiting
 - 🔍 **Checksum Verification**: Ensure data integrity
 
+## Table of Contents
+
+- [Installation](#installation)
+- [OAuth Setup](#oauth-setup)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Advanced Usage](#advanced-usage)
+- [Architecture](#architecture)
+- [Development](#development)
+- [Troubleshooting](#troubleshooting)
+- [FAQ](#faq)
+- [Contributing](#contributing)
+- [License](#license)
+- [Support](#support)
+
 ## Installation
 
 ### From Source
@@ -359,6 +374,18 @@ make build
 2. **Permission errors** - Ensure you have write access to the destination directory
 3. **Authentication fails** - Delete `~/.cloudpull/token.json` and re-authenticate
 4. **Rate limit errors** - CloudPull automatically handles these, but you can reduce concurrent downloads
+5. **Network connectivity issues** - Check your internet connection and firewall settings. If behind a proxy, set the `HTTP_PROXY` and `HTTPS_PROXY` environment variables:
+   ```bash
+   export HTTP_PROXY=http://proxy.example.com:8080
+   export HTTPS_PROXY=http://proxy.example.com:8080
+   ```
+6. **Large file download failures** - For files over 1GB, ensure you have sufficient disk space and stable connection. CloudPull will automatically resume interrupted downloads. You can also reduce chunk size in the config.
+7. **Google Drive quota exceeded** - This occurs when you hit daily download limits (10TB/day). Wait 24 hours or spread downloads across multiple days. Check quota status at <https://drive.google.com/settings/storage>
+8. **SQLite database corruption** - If you see "database disk image is malformed" errors, delete the corrupted database and restart:
+   ```bash
+   rm ~/.cloudpull/cloudpull.db
+   cloudpull resume  # This will start fresh
+   ```
 
 ## FAQ
 

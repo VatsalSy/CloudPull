@@ -301,8 +301,8 @@ func TestExponentialBackoff(t *testing.T) {
 
 	t.Run("MaxElapsedTime", func(t *testing.T) {
 		config := &BackoffConfig{
-			InitialInterval: 10 * time.Millisecond,
-			MaxElapsedTime:  30 * time.Millisecond,
+			InitialInterval: 2 * time.Millisecond,
+			MaxElapsedTime:  6 * time.Millisecond,
 		}
 
 		backoff := NewExponentialBackoff(config)
@@ -312,7 +312,7 @@ func TestExponentialBackoff(t *testing.T) {
 		assert.True(t, interval1 > 0)
 
 		// Wait to exceed max elapsed time
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 
 		// Next backoff should return -1
 		interval2 := backoff.NextBackOff()

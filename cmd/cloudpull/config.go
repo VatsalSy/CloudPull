@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"runtime"
 	"strconv"
-	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/fatih/color"
@@ -195,7 +194,11 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 
 	switch oldValue.(type) {
 	case bool:
-		newValue = strings.ToLower(value) == "true"
+		parsedBool, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("invalid boolean value for %s: %w", key, err)
+		}
+		newValue = parsedBool
 	case int:
 		parsedInt, err := strconv.ParseInt(value, 10, 0)
 		if err != nil {
@@ -220,6 +223,12 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 	if configFile == "" {
 		home, _ := os.UserHomeDir()
 		configFile = filepath.Join(home, ".cloudpull", "config.yaml")
+	}
+
+	// Ensure parent directory exists
+	configDir := filepath.Dir(configFile)
+	if err := os.MkdirAll(configDir, 0750); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
 	if err := viper.WriteConfigAs(configFile); err != nil {
@@ -254,6 +263,12 @@ func runConfigReset(cmd *cobra.Command, args []string) error {
 		configFile = filepath.Join(home, ".cloudpull", "config.yaml")
 	}
 
+	// Ensure parent directory exists
+	configDir := filepath.Dir(configFile)
+	if err := os.MkdirAll(configDir, 0750); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
 	if err := viper.WriteConfigAs(configFile); err != nil {
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}
@@ -271,6 +286,11 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 
 	// Ensure file exists
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		// Ensure parent directory exists
+		configDir := filepath.Dir(configFile)
+		if err := os.MkdirAll(configDir, 0750); err != nil {
+			return fmt.Errorf("failed to create config directory: %w", err)
+		}
 		// Create with current settings
 		if err := viper.WriteConfigAs(configFile); err != nil {
 			return fmt.Errorf("failed to create config file: %w", err)

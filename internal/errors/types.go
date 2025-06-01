@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -81,7 +82,16 @@ func (et ErrorType) IsRetryable() bool {
 	case ErrorTypePermission, ErrorTypeConfiguration:
 		return false
 	case ErrorTypeCorruption:
-		return true // Retry from start
+		// Corruption errors are retryable but require special handling.
+		// When a file corruption is detected (e.g., checksum mismatch,
+		// incomplete download), the retry strategy should:
+		// 1. Delete the corrupted local file
+		// 2. Reset the file's download progress in the database
+		// 3. Restart the download from the beginning
+		// This ensures we don't append to or resume from corrupted data.
+		// The retry should use exponential backoff to handle temporary
+		// issues that might have caused the corruption.
+		return true
 	default:
 		return false
 	}
@@ -234,8 +244,113 @@ func GetErrorType(err error) ErrorType {
 		return ErrorTypeContext
 	}
 
-	// TODO: Add more error type detection based on error messages
-	// or specific error types from various packages
+	// Convert to string for pattern matching
+	errStr := err.Error()
+
+	// Network errors (connection, timeout, DNS)
+	networkPatterns := []string{
+		"connection refused",
+		"connection reset",
+		"no such host",
+		"network is unreachable",
+		"timeout",
+		"i/o timeout",
+		"TLS handshake timeout",
+		"dial tcp",
+		"lookup",
+		"temporary failure in name resolution",
+		"no route to host",
+		"broken pipe",
+	}
+	for _, pattern := range networkPatterns {
+		if containsIgnoreCase(errStr, pattern) {
+			return ErrorTypeNetwork
+		}
+	}
+
+	// Google Drive API quota errors (HTTP 429 and quota messages)
+	quotaPatterns := []string{
+		"429",
+		"rate limit",
+		"quota exceeded",
+		"userRateLimitExceeded",
+		"rateLimitExceeded",
+		"dailyLimitExceeded",
+		"quotaExceeded",
+		"Too Many Requests",
+	}
+	for _, pattern := range quotaPatterns {
+		if containsIgnoreCase(errStr, pattern) {
+			return ErrorTypeAPIQuota
+		}
+	}
+
+	// Storage errors (disk full, write errors)
+	storagePatterns := []string{
+		"disk full",
+		"no space left on device",
+		"insufficient storage",
+		"cannot allocate memory",
+		"file too large",
+		"exceeds filesystem size",
+	}
+	for _, pattern := range storagePatterns {
+		if containsIgnoreCase(errStr, pattern) {
+			return ErrorTypeStorage
+		}
+	}
+
+	// OAuth token expiration and authentication errors
+	authPatterns := []string{
+		"invalid_grant",
+		"invalid_token",
+		"token expired",
+		"401 Unauthorized",
+		"403 Forbidden",
+		"access_denied",
+		"permission denied",
+		"insufficient_scope",
+		"authError",
+		"unauthenticated",
+	}
+	for _, pattern := range authPatterns {
+		if containsIgnoreCase(errStr, pattern) {
+			return ErrorTypePermission
+		}
+	}
+
+	// Configuration errors
+	configPatterns := []string{
+		"invalid configuration",
+		"missing configuration",
+		"invalid_client",
+		"malformed",
+	}
+	for _, pattern := range configPatterns {
+		if containsIgnoreCase(errStr, pattern) {
+			return ErrorTypeConfiguration
+		}
+	}
+
+	// API errors (general API failures)
+	apiPatterns := []string{
+		"500 Internal Server Error",
+		"502 Bad Gateway",
+		"503 Service Unavailable",
+		"504 Gateway Timeout",
+		"API error",
+		"backend error",
+	}
+	for _, pattern := range apiPatterns {
+		if containsIgnoreCase(errStr, pattern) {
+			return ErrorTypeAPI
+		}
+	}
 
 	return ErrorTypeUnknown
+}
+
+// containsIgnoreCase checks if s contains substr ignoring case.
+func containsIgnoreCase(s, substr string) bool {
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }

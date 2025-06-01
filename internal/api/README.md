@@ -1,7 +1,7 @@
 # Google Drive API Integration
 
-This package provides a production-ready Google Drive API integration for CloudPull with comprehensive error
-handling, rate limiting, and batch operations support.
+This package provides a production-ready Google Drive API integration for CloudPull.
+It includes comprehensive error handling, rate limiting, and batch operations support.
 
 ## Components
 

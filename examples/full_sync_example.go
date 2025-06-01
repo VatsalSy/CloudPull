@@ -50,6 +50,18 @@ func main() {
 		*outputDir = filepath.Join(usr.HomeDir, (*outputDir)[1:])
 	}
 
+	// Convert to absolute path
+	absPath, err := filepath.Abs(*outputDir)
+	if err != nil {
+		log.Fatal("Failed to resolve absolute path:", err)
+	}
+	*outputDir = absPath
+
+	// Ensure output directory exists
+	if err := os.MkdirAll(*outputDir, 0750); err != nil {
+		log.Fatal("Failed to create output directory:", err)
+	}
+
 	// Create and initialize application
 	application, err := app.New()
 	if err != nil {
@@ -89,6 +101,7 @@ func main() {
 		fmt.Printf("\n%s Received signal: %v\n", color.YellowString("⚠"), sig)
 		fmt.Println("Stopping sync gracefully...")
 		cancel()
+		signal.Stop(sigChan)
 	}()
 
 	// Start sync or resume

@@ -20,7 +20,12 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// on both *DB and *sqlx.Tx.
+// DBInterface defines common database operations that are available
+// on both *DB and *sqlx.Tx. The core sqlx methods (ExecContext, GetContext,
+// SelectContext, QueryContext, PrepareNamedContext, NamedExecContext) are
+// implemented by both types. The WithTx method is implemented by both *DB
+// (which creates a new transaction) and txWrapper (which reuses the existing
+// transaction), allowing nested transaction-like behavior.
 type DBInterface interface {
 	// Core sqlx methods
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
@@ -30,7 +35,7 @@ type DBInterface interface {
 	PrepareNamedContext(ctx context.Context, query string) (*sqlx.NamedStmt, error)
 	NamedExecContext(ctx context.Context, query string, arg interface{}) (sql.Result, error)
 
-	// Transaction support (only available on *DB)
+	// Transaction support (implemented by both *DB and txWrapper)
 	WithTx(ctx context.Context, fn func(*sqlx.Tx) error) error
 }
 

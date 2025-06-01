@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/VatsalSy/CloudPull/internal/errors"
 )
 
 // DefaultDatabasePath is the default location for the SQLite database.
@@ -78,18 +80,26 @@ func IsRetryableError(err error) bool {
 		return false
 	}
 
-	// TODO: Add more sophisticated error classification
-	// For now, consider most errors retryable except specific ones
+	// Use the errors package for sophisticated error classification
+	if errorType := errors.GetErrorType(err); errorType != errors.ErrorTypeUnknown {
+		return errorType.IsRetryable()
+	}
+
+	// Fallback to string-based classification for untyped errors
 	errStr := err.Error()
 
-	// Non-retryable errors
+	// Non-retryable errors (permanent failures)
 	nonRetryable := []string{
 		"permission denied",
 		"no such file",
 		"disk full",
 		"quota exceeded",
+		"invalid_grant",  // OAuth token permanently invalid
+		"access_denied",  // OAuth scope or permission issue
+		"invalid_client", // OAuth client configuration error
 	}
 
+	// Check for non-retryable patterns
 	for _, nr := range nonRetryable {
 		if containsIgnoreCase(errStr, nr) {
 			return false

@@ -19,6 +19,8 @@ package sync
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
+	"sort"
 	"sync"
 	"time"
 
@@ -379,10 +381,12 @@ func (eb *EventBus) callHandler(handler EventHandler, event Event) {
 		if r := recover(); r != nil {
 			// Log panic but don't crash
 			if eb.logger != nil {
+				stackTrace := string(debug.Stack())
 				eb.logger.Error(fmt.Errorf("panic in event handler: %v", r),
 					"Event handler panicked",
 					"event_type", event.Type.String(),
 					"panic", r,
+					"stack_trace", stackTrace,
 				)
 			}
 		}
@@ -394,25 +398,16 @@ func (eb *EventBus) callHandler(handler EventHandler, event Event) {
 // sortHandlers sorts handlers by priority (higher priority first).
 func (eb *EventBus) sortHandlers(eventType EventType) {
 	handlers := eb.handlers[eventType]
-	for i := 0; i < len(handlers)-1; i++ {
-		for j := i + 1; j < len(handlers); j++ {
-			if handlers[j].Priority > handlers[i].Priority {
-				handlers[i], handlers[j] = handlers[j], handlers[i]
-			}
-		}
-	}
+	sort.Slice(handlers, func(i, j int) bool {
+		return handlers[i].Priority > handlers[j].Priority
+	})
 }
 
 // sortGlobalHandlers sorts global handlers by priority.
 func (eb *EventBus) sortGlobalHandlers() {
-	for i := 0; i < len(eb.globalHandlers)-1; i++ {
-		for j := i + 1; j < len(eb.globalHandlers); j++ {
-			if eb.globalHandlers[j].Priority > eb.globalHandlers[i].Priority {
-				eb.globalHandlers[i], eb.globalHandlers[j] =
-					eb.globalHandlers[j], eb.globalHandlers[i]
-			}
-		}
-	}
+	sort.Slice(eb.globalHandlers, func(i, j int) bool {
+		return eb.globalHandlers[i].Priority > eb.globalHandlers[j].Priority
+	})
 }
 
 // String returns string representation of event type.

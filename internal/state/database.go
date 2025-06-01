@@ -153,6 +153,9 @@ func (db *DB) WithTx(ctx context.Context, fn func(*sqlx.Tx) error) error {
 	}
 
 	if err := tx.Commit(); err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return fmt.Errorf("failed to commit transaction: %w, rollback failed: %w", err, rbErr)
+		}
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
@@ -175,7 +178,13 @@ func (db *DB) WithReadTx(ctx context.Context, fn func(*sqlx.Tx) error) error {
 		return err
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return fmt.Errorf("failed to commit read transaction: %w, rollback failed: %w", err, rbErr)
+		}
+		return fmt.Errorf("failed to commit read transaction: %w", err)
+	}
+	return nil
 }
 
 // Vacuum performs database maintenance.

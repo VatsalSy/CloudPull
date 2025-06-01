@@ -292,9 +292,7 @@ issues:
     # Exclude test files from certain linters
     - path: _test\.go
       linters:
-        - errcheck
         - wrapcheck
-        - gosec
         - dupl
         - gocognit
         - gocyclo

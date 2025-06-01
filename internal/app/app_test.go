@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -140,22 +142,25 @@ func TestAppSignalHandling(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Channel to signal when the app has started handling signals
-	started := make(chan struct{})
+	// Skip signal tests on Windows
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping signal test on Windows")
+	}
+
+	// Use WaitGroup to ensure signal handler is set up
+	var wg sync.WaitGroup
+	wg.Add(1)
 
 	// Start the app's signal handling in a goroutine
 	go func() {
-		// Notify that we're about to start signal handling
-		close(started)
+		// Signal that the goroutine has started
+		wg.Done()
 		// This will block until a signal is received
 		app.handleSignals(cancel)
 	}()
 
-	// Wait for signal handling to start
-	<-started
-
-	// Give it a moment to set up signal handlers
-	time.Sleep(100 * time.Millisecond)
+	// Wait for signal handler goroutine to start
+	wg.Wait()
 
 	// Send SIGINT to the current process
 	err = syscall.Kill(os.Getpid(), syscall.SIGINT)

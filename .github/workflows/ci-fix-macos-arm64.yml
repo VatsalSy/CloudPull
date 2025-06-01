@@ -264,7 +264,7 @@ jobs:
       - name: Check for broken links
         uses: lycheeverse/lychee-action@v1
         with:
-          args: --verbose --no-progress './**/*.md' './**/*.go' --exclude-mail
+          args: --verbose --no-progress --timeout 30 './**/*.md' './**/*.go' --exclude-mail
           fail: true
 
   dependabot-auto-merge:

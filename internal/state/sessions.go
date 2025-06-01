@@ -122,6 +122,9 @@ func (s *SessionStore) List(ctx context.Context, limit, offset int) ([]*Session,
 
 // Update updates a session.
 func (s *SessionStore) Update(ctx context.Context, session *Session) error {
+	// Set updated_at to current time
+	session.UpdatedAt = time.Now()
+
 	query := `
     UPDATE sessions SET
       root_folder_name = :root_folder_name,
@@ -133,7 +136,8 @@ func (s *SessionStore) Update(ctx context.Context, session *Session) error {
       failed_files = :failed_files,
       skipped_files = :skipped_files,
       total_bytes = :total_bytes,
-      completed_bytes = :completed_bytes
+      completed_bytes = :completed_bytes,
+      updated_at = :updated_at
     WHERE id = :id`
 
 	result, err := s.db.NamedExecContext(ctx, query, session)
@@ -246,11 +250,33 @@ func (s *SessionStore) Complete(ctx context.Context, id string) error {
 
 // Pause marks a session as paused.
 func (s *SessionStore) Pause(ctx context.Context, id string) error {
+	// Get current session to validate state
+	session, err := s.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get session for pause: %w", err)
+	}
+
+	// Only allow pausing active sessions
+	if session.Status != SessionStatusActive {
+		return fmt.Errorf("cannot pause session in status %s: only active sessions can be paused", session.Status)
+	}
+
 	return s.UpdateStatus(ctx, id, SessionStatusPaused)
 }
 
 // Resume marks a session as active.
 func (s *SessionStore) Resume(ctx context.Context, id string) error {
+	// Get current session to validate state
+	session, err := s.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get session for resume: %w", err)
+	}
+
+	// Only allow resuming paused sessions
+	if session.Status != SessionStatusPaused {
+		return fmt.Errorf("cannot resume session in status %s: only paused sessions can be resumed", session.Status)
+	}
+
 	return s.UpdateStatus(ctx, id, SessionStatusActive)
 }
 
@@ -351,6 +377,11 @@ func (s *SessionStore) GetResumableSessions(ctx context.Context) ([]*Session, er
 }
 
 // SessionProgressDelta represents changes to session progress counters.
+// Thread-Safety: This struct is NOT thread-safe. It is designed to be used
+// as a simple data container for passing progress updates. External
+// synchronization (such as mutexes or channels) must be used when accessing
+// or modifying fields from multiple goroutines. Typically, this struct should
+// be created, populated, and passed through channels for safe concurrent use.
 type SessionProgressDelta struct {
 	TotalFiles     int64
 	CompletedFiles int64

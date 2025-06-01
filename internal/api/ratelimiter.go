@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -45,8 +46,8 @@ type RateLimiter struct {
 	limiter         *rate.Limiter
 	batchLimiter    *rate.Limiter
 	exportLimiter   *rate.Limiter
-	totalRequests   int64
-	blockedRequests int64
+	totalRequests   atomic.Int64
+	blockedRequests atomic.Int64
 	mu              sync.RWMutex
 }
 
@@ -167,16 +168,25 @@ func (rl *RateLimiter) SetRateLimit(rateLimit int) {
 
 // SetBurstSize updates the burst size dynamically.
 func (rl *RateLimiter) SetBurstSize(burstSize int) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
 	rl.limiter.SetBurst(burstSize)
 
-	// Update batch and export limiters proportionally
-	// Batch limiter has double its rate limit as burst
-	batchRate := int(rl.batchLimiter.Limit())
-	rl.batchLimiter.SetBurst(batchRate * 2)
+	// Update batch and export limiters proportionally based on new burstSize
+	// Batch limiter gets 50% of main burst size
+	batchBurst := burstSize / 2
+	if batchBurst < 1 {
+		batchBurst = 1
+	}
+	rl.batchLimiter.SetBurst(batchBurst)
 
-	// Export limiter has same burst as its rate limit
-	exportRate := int(rl.exportLimiter.Limit())
-	rl.exportLimiter.SetBurst(exportRate)
+	// Export limiter gets 30% of main burst size
+	exportBurst := burstSize * 3 / 10
+	if exportBurst < 1 {
+		exportBurst = 1
+	}
+	rl.exportLimiter.SetBurst(exportBurst)
 }
 
 // GetMetrics returns current rate limiter metrics.
@@ -185,17 +195,19 @@ func (rl *RateLimiter) GetMetrics() RateLimiterMetrics {
 	defer rl.mu.RUnlock()
 
 	duration := time.Since(rl.lastResetTime)
-	requestsPerSecond := float64(rl.totalRequests) / duration.Seconds()
+	totalReqs := rl.totalRequests.Load()
+	blockedReqs := rl.blockedRequests.Load()
+	requestsPerSecond := float64(totalReqs) / duration.Seconds()
 
 	// Calculate block rate with zero check to prevent divide-by-zero
 	var blockRate float64
-	if rl.totalRequests > 0 {
-		blockRate = float64(rl.blockedRequests) / float64(rl.totalRequests) * 100
+	if totalReqs > 0 {
+		blockRate = float64(blockedReqs) / float64(totalReqs) * 100
 	}
 
 	return RateLimiterMetrics{
-		TotalRequests:     rl.totalRequests,
-		BlockedRequests:   rl.blockedRequests,
+		TotalRequests:     totalReqs,
+		BlockedRequests:   blockedReqs,
 		RequestsPerSecond: requestsPerSecond,
 		BlockRate:         blockRate,
 		Duration:          duration,
@@ -207,23 +219,19 @@ func (rl *RateLimiter) ResetMetrics() {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
-	rl.totalRequests = 0
-	rl.blockedRequests = 0
+	rl.totalRequests.Store(0)
+	rl.blockedRequests.Store(0)
 	rl.lastResetTime = time.Now()
 }
 
 // incrementTotalRequests safely increments total request counter.
 func (rl *RateLimiter) incrementTotalRequests() {
-	rl.mu.Lock()
-	rl.totalRequests++
-	rl.mu.Unlock()
+	rl.totalRequests.Add(1)
 }
 
 // incrementBlockedRequests safely increments blocked request counter.
 func (rl *RateLimiter) incrementBlockedRequests() {
-	rl.mu.Lock()
-	rl.blockedRequests++
-	rl.mu.Unlock()
+	rl.blockedRequests.Add(1)
 }
 
 // RateLimiterMetrics contains rate limiter statistics.

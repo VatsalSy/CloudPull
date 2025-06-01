@@ -116,6 +116,10 @@ func runSync(cmd *cobra.Command, args []string) error {
 			home, _ := os.UserHomeDir()
 			// Sanitize folderID to prevent path traversal
 			cleanedFolderID := filepath.Clean(folderID)
+			// Check for any path separators
+			if strings.ContainsAny(cleanedFolderID, "/\\") {
+				return fmt.Errorf("invalid folder ID: contains path separators")
+			}
 			// Remove any leading slashes or dots
 			cleanedFolderID = strings.TrimLeft(cleanedFolderID, "./")
 			// Ensure it doesn't contain parent directory references

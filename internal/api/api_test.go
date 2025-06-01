@@ -25,11 +25,6 @@ import (
  * Updated: 2025-01-29
  */
 
-// Mock logger for testing.
-type mockLogger struct {
-	*logger.Logger
-}
-
 func newMockLogger() *logger.Logger {
 	cfg := &logger.Config{
 		Level: "error",
@@ -159,11 +154,11 @@ func TestAuthManager(t *testing.T) {
 	}
 
 	t.Run("token management", func(t *testing.T) {
-		logger := newMockLogger()
+		testLog := newMockLogger()
 		tokenPath := filepath.Join(t.TempDir(), "cloudpull_test_token.json")
 		defer os.Remove(tokenPath)
 
-		am, err := NewAuthManager(credPath, tokenPath, logger)
+		am, err := NewAuthManager(credPath, tokenPath, testLog)
 		require.NoError(t, err)
 
 		// Check if authenticated (should be false initially)
