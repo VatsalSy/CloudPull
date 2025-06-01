@@ -30,4 +30,3 @@ func generateID() string {
 	randomHex := hex.EncodeToString(randomBytes)
 	return fmt.Sprintf("session_%s_%s", timestamp, randomHex)
 }
-

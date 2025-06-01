@@ -122,7 +122,7 @@ CREATE INDEX IF NOT EXISTS idx_errors_session_id ON error_log(session_id);
 CREATE INDEX IF NOT EXISTS idx_errors_item_id ON error_log(item_id);
 
 -- Triggers for updated_at
-CREATE TRIGGER IF NOT EXISTS update_sessions_timestamp 
+CREATE TRIGGER IF NOT EXISTS update_sessions_timestamp
     AFTER UPDATE ON sessions
     FOR EACH ROW
     WHEN NEW.updated_at = OLD.updated_at
@@ -130,7 +130,7 @@ CREATE TRIGGER IF NOT EXISTS update_sessions_timestamp
         UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
     END;
 
-CREATE TRIGGER IF NOT EXISTS update_folders_timestamp 
+CREATE TRIGGER IF NOT EXISTS update_folders_timestamp
     AFTER UPDATE ON folders
     FOR EACH ROW
     WHEN NEW.updated_at = OLD.updated_at
@@ -138,7 +138,7 @@ CREATE TRIGGER IF NOT EXISTS update_folders_timestamp
         UPDATE folders SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
     END;
 
-CREATE TRIGGER IF NOT EXISTS update_files_timestamp 
+CREATE TRIGGER IF NOT EXISTS update_files_timestamp
     AFTER UPDATE ON files
     FOR EACH ROW
     WHEN NEW.updated_at = OLD.updated_at
@@ -146,7 +146,7 @@ CREATE TRIGGER IF NOT EXISTS update_files_timestamp
         UPDATE files SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
     END;
 
-CREATE TRIGGER IF NOT EXISTS update_config_timestamp 
+CREATE TRIGGER IF NOT EXISTS update_config_timestamp
     AFTER UPDATE ON config
     FOR EACH ROW
     WHEN NEW.updated_at = OLD.updated_at
@@ -156,7 +156,7 @@ CREATE TRIGGER IF NOT EXISTS update_config_timestamp
 
 -- Views for easier querying
 CREATE VIEW IF NOT EXISTS session_summary AS
-SELECT 
+SELECT
     s.id,
     s.root_folder_name,
     s.destination_path,
@@ -171,14 +171,14 @@ SELECT
     COALESCE(ROUND(CAST(s.completed_bytes AS FLOAT) / NULLIF(s.total_bytes, 0) * 100, 2), 0) as bytes_progress_percent,
     s.start_time,
     s.end_time,
-    CASE 
+    CASE
         WHEN s.end_time IS NOT NULL THEN (julianday(s.end_time) - julianday(s.start_time)) * 86400
         ELSE (julianday('now') - julianday(s.start_time)) * 86400
     END as duration_seconds
 FROM sessions s;
 
 CREATE VIEW IF NOT EXISTS pending_downloads AS
-SELECT 
+SELECT
     f.id,
     f.drive_id,
     f.name,

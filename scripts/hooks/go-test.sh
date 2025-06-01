@@ -16,7 +16,7 @@ case "$test_type" in
       exit 1
     fi
     ;;
-  
+
   integration)
     # Run integration tests
     if ! go test -race -run Integration ./...; then
@@ -25,7 +25,7 @@ case "$test_type" in
       exit 1
     fi
     ;;
-  
+
   all)
     # Run all tests
     if ! go test -race ./...; then
@@ -34,7 +34,7 @@ case "$test_type" in
       exit 1
     fi
     ;;
-  
+
   *)
     echo "Unknown test type: $test_type"
     echo "Valid types: unit, integration, all"

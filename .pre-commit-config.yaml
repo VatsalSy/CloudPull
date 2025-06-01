@@ -46,21 +46,15 @@ repos:
       - id: check-toml
 
   # Go specific hooks
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v1.55.2
+  - repo: local
     hooks:
       - id: golangci-lint
         name: golangci-lint
         entry: golangci-lint run --fix
         types: [go]
-        language: golang
+        language: system
         pass_filenames: false
-        # Require golangci-lint to be available
-        additional_dependencies: []
-
-  # Go fmt
-  - repo: local
-    hooks:
+        require_serial: true
       - id: go-fmt
         name: go fmt
         entry: scripts/hooks/go-fmt.sh
@@ -107,7 +101,7 @@ repos:
         language: script
         types: [go]
         pass_filenames: false
-        stages: [push]
+        stages: [pre-push]
 
       # Security check
       - id: go-sec
@@ -146,15 +140,16 @@ repos:
         types: [shell]
         exclude: ^(vendor/)
 
-  # Dockerfile
-  - repo: https://github.com/hadolint/hadolint
-    rev: v2.12.0
-    hooks:
-      - id: hadolint-docker
-        name: hadolint
-        entry: hadolint
-        language: docker
-        types: [dockerfile]
+  # Dockerfile (commented out - requires Docker to be running)
+  # Uncomment this section if you have Docker installed and running
+  # - repo: https://github.com/hadolint/hadolint
+  #   rev: v2.12.0
+  #   hooks:
+  #     - id: hadolint-docker
+  #       name: hadolint
+  #       entry: hadolint
+  #       language: docker
+  #       types: [dockerfile]
 
   # Commit message
   - repo: https://github.com/commitizen-tools/commitizen

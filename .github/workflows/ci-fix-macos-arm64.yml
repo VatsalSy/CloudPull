@@ -187,7 +187,7 @@ jobs:
             export CC="clang -target arm64-apple-darwin"
             export CXX="clang++ -target arm64-apple-darwin"
           fi
-          
+
           go build -v -o cloudpull-${{ runner.os }}-${{ matrix.arch }}${{ steps.build-env.outputs.ext }} ./cmd/cloudpull
 
       - name: Test binary

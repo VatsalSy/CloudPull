@@ -130,8 +130,8 @@ func (s *FolderStore) GetByDriveID(ctx context.Context, driveID, sessionID strin
 func (s *FolderStore) GetChildren(ctx context.Context, parentID, sessionID string) ([]*Folder, error) {
 	var folders []*Folder
 	query := `
-    SELECT * FROM folders 
-    WHERE parent_id = $1 AND session_id = $2 
+    SELECT * FROM folders
+    WHERE parent_id = $1 AND session_id = $2
     ORDER BY name`
 
 	err := s.db.SelectContext(ctx, &folders, query, parentID, sessionID)
@@ -159,8 +159,8 @@ func (s *FolderStore) GetBySession(ctx context.Context, sessionID string) ([]*Fo
 func (s *FolderStore) GetByStatus(ctx context.Context, sessionID, status string) ([]*Folder, error) {
 	var folders []*Folder
 	query := `
-    SELECT * FROM folders 
-    WHERE session_id = $1 AND status = $2 
+    SELECT * FROM folders
+    WHERE session_id = $1 AND status = $2
     ORDER BY path`
 
 	err := s.db.SelectContext(ctx, &folders, query, sessionID, status)
@@ -175,9 +175,9 @@ func (s *FolderStore) GetByStatus(ctx context.Context, sessionID, status string)
 func (s *FolderStore) GetPendingFolders(ctx context.Context, sessionID string, limit int) ([]*Folder, error) {
 	var folders []*Folder
 	query := `
-    SELECT * FROM folders 
-    WHERE session_id = $1 AND status = $2 
-    ORDER BY path 
+    SELECT * FROM folders
+    WHERE session_id = $1 AND status = $2
+    ORDER BY path
     LIMIT $3`
 
 	err := s.db.SelectContext(ctx, &folders, query, sessionID, FolderStatusPending, limit)
@@ -293,8 +293,8 @@ func (s *FolderStore) MarkAsScanned(ctx context.Context, id string) error {
 // MarkAsFailed marks a folder as failed with error message.
 func (s *FolderStore) MarkAsFailed(ctx context.Context, id string, errorMsg string) error {
 	query := `
-    UPDATE folders 
-    SET status = $1, error_message = $2 
+    UPDATE folders
+    SET status = $1, error_message = $2
     WHERE id = $3`
 
 	result, err := s.db.ExecContext(ctx, query, FolderStatusFailed, errorMsg, id)
@@ -359,9 +359,9 @@ func (s *FolderStore) GetPath(ctx context.Context, folderID string) ([]*Folder, 
 // CountByStatus counts folders by status for a session.
 func (s *FolderStore) CountByStatus(ctx context.Context, sessionID string) (map[string]int64, error) {
 	query := `
-    SELECT status, COUNT(*) as count 
-    FROM folders 
-    WHERE session_id = $1 
+    SELECT status, COUNT(*) as count
+    FROM folders
+    WHERE session_id = $1
     GROUP BY status`
 
 	rows, err := s.db.QueryContext(ctx, query, sessionID)

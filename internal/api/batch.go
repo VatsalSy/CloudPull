@@ -28,11 +28,11 @@ import (
  */
 
 const (
-	// Maximum concurrent requests
+	// Maximum concurrent requests.
 	maxConcurrentRequests = 10
-	// Maximum requests to process in one batch
+	// Maximum requests to process in one batch.
 	maxBatchSize = 100
-	// Timeout for batch processing
+	// Timeout for batch processing.
 	batchTimeout = 30 * time.Second
 )
 
@@ -55,9 +55,9 @@ const (
 
 // BatchResponse wraps the response from a batch request.
 type BatchResponse struct {
-	Request BatchRequest
 	Data    interface{}
 	Error   error
+	Request BatchRequest
 }
 
 // BatchProcessor handles batch operations.
@@ -67,12 +67,12 @@ type BatchProcessor struct {
 	logger      *logger.Logger
 	results     chan BatchResponse
 	cancel      context.CancelFunc
+	workers     chan struct{}
+	jobs        chan BatchRequest
 	queue       []BatchRequest
 	wg          sync.WaitGroup
 	mu          sync.Mutex
 	processing  bool
-	workers     chan struct{}
-	jobs        chan BatchRequest
 }
 
 // NewBatchProcessor creates a new batch processor.
@@ -85,12 +85,12 @@ func NewBatchProcessor(service *drive.Service, rateLimiter *RateLimiter, log *lo
 		results:     make(chan BatchResponse, maxBatchSize),
 		jobs:        make(chan BatchRequest, maxBatchSize),
 	}
-	
+
 	// Start worker pool
 	ctx, cancel := context.WithCancel(context.Background())
 	bp.cancel = cancel
 	bp.startWorkerPool(ctx)
-	
+
 	return bp
 }
 
@@ -144,7 +144,7 @@ func (bp *BatchProcessor) processQueue(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			bp.logger.Info("Context cancelled, stopping queue processing")
+			bp.logger.Info("Context canceled, stopping queue processing")
 			return ctx.Err()
 		default:
 			batch := bp.dequeueBatch()
@@ -191,7 +191,7 @@ func (bp *BatchProcessor) startWorkerPool(ctx context.Context) {
 // worker processes batch requests from the jobs channel.
 func (bp *BatchProcessor) worker(ctx context.Context) {
 	defer bp.wg.Done()
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -200,17 +200,17 @@ func (bp *BatchProcessor) worker(ctx context.Context) {
 			if !ok {
 				return
 			}
-			
+
 			// Create context with timeout for this request
 			reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			
+
 			// Wait for rate limit
 			if err := bp.rateLimiter.Wait(reqCtx); err != nil {
 				bp.handleBatchResponse(req, nil, err)
 				cancel()
 				continue
 			}
-			
+
 			// Execute request based on type
 			switch req.Type {
 			case BatchGetMetadata:
@@ -222,7 +222,7 @@ func (bp *BatchProcessor) worker(ctx context.Context) {
 			default:
 				bp.logger.Warn("Unknown batch request type", "type", req.Type)
 			}
-			
+
 			cancel()
 		}
 	}
@@ -333,7 +333,7 @@ func (bp *BatchProcessor) Stop() error {
 
 	// Close jobs channel to signal workers to stop
 	close(bp.jobs)
-	
+
 	// Wait for all workers to complete
 	bp.wg.Wait()
 

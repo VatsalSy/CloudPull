@@ -167,8 +167,8 @@ func (s *FileStore) GetBySession(ctx context.Context, sessionID string) ([]*File
 func (s *FileStore) GetByStatus(ctx context.Context, sessionID, status string) ([]*File, error) {
 	var files []*File
 	query := `
-    SELECT * FROM files 
-    WHERE session_id = $1 AND status = $2 
+    SELECT * FROM files
+    WHERE session_id = $1 AND status = $2
     ORDER BY size ASC` // Smaller files first
 
 	err := s.db.SelectContext(ctx, &files, query, sessionID, status)
@@ -183,8 +183,8 @@ func (s *FileStore) GetByStatus(ctx context.Context, sessionID, status string) (
 func (s *FileStore) GetPendingDownloads(ctx context.Context, sessionID string, limit int) ([]*PendingDownload, error) {
 	var downloads []*PendingDownload
 	query := `
-    SELECT * FROM pending_downloads 
-    WHERE session_id = $1 
+    SELECT * FROM pending_downloads
+    WHERE session_id = $1
     LIMIT $2`
 
 	err := s.db.SelectContext(ctx, &downloads, query, sessionID, limit)
@@ -255,8 +255,8 @@ func (s *FileStore) UpdateStatus(ctx context.Context, id, status string) error {
 // UpdateProgress updates file download progress.
 func (s *FileStore) UpdateProgress(ctx context.Context, id string, bytesDownloaded int64) error {
 	query := `
-    UPDATE files 
-    SET bytes_downloaded = $1, status = $2 
+    UPDATE files
+    SET bytes_downloaded = $1, status = $2
     WHERE id = $3`
 
 	result, err := s.db.ExecContext(ctx, query, bytesDownloaded, FileStatusDownloading, id)
@@ -279,8 +279,8 @@ func (s *FileStore) UpdateProgress(ctx context.Context, id string, bytesDownload
 // MarkAsDownloading marks a file as downloading.
 func (s *FileStore) MarkAsDownloading(ctx context.Context, id string) error {
 	query := `
-    UPDATE files 
-    SET status = $1, download_attempts = download_attempts + 1 
+    UPDATE files
+    SET status = $1, download_attempts = download_attempts + 1
     WHERE id = $2`
 
 	result, err := s.db.ExecContext(ctx, query, FileStatusDownloading, id)
@@ -303,8 +303,8 @@ func (s *FileStore) MarkAsDownloading(ctx context.Context, id string) error {
 // MarkAsCompleted marks a file as completed.
 func (s *FileStore) MarkAsCompleted(ctx context.Context, id string, localModTime time.Time) error {
 	query := `
-    UPDATE files 
-    SET status = $1, bytes_downloaded = size, local_modified_time = $2 
+    UPDATE files
+    SET status = $1, bytes_downloaded = size, local_modified_time = $2
     WHERE id = $3`
 
 	result, err := s.db.ExecContext(ctx, query, FileStatusCompleted, localModTime, id)
@@ -327,8 +327,8 @@ func (s *FileStore) MarkAsCompleted(ctx context.Context, id string, localModTime
 // MarkAsFailed marks a file as failed with error message.
 func (s *FileStore) MarkAsFailed(ctx context.Context, id string, errorMsg string) error {
 	query := `
-    UPDATE files 
-    SET status = $1, error_message = $2 
+    UPDATE files
+    SET status = $1, error_message = $2
     WHERE id = $3`
 
 	result, err := s.db.ExecContext(ctx, query, FileStatusFailed, errorMsg, id)
@@ -351,8 +351,8 @@ func (s *FileStore) MarkAsFailed(ctx context.Context, id string, errorMsg string
 // MarkAsSkipped marks a file as skipped.
 func (s *FileStore) MarkAsSkipped(ctx context.Context, id string, reason string) error {
 	query := `
-    UPDATE files 
-    SET status = $1, error_message = $2 
+    UPDATE files
+    SET status = $1, error_message = $2
     WHERE id = $3`
 
 	result, err := s.db.ExecContext(ctx, query, FileStatusSkipped, reason, id)
@@ -396,7 +396,7 @@ func (s *FileStore) Delete(ctx context.Context, id string) error {
 // GetStats retrieves file statistics for a session.
 func (s *FileStore) GetStats(ctx context.Context, sessionID string) (*FileStats, error) {
 	query := `
-    SELECT 
+    SELECT
       COUNT(*) as total_count,
       COALESCE(SUM(size), 0) as total_bytes,
       COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) as completed_count,
@@ -420,9 +420,9 @@ func (s *FileStore) GetStats(ctx context.Context, sessionID string) (*FileStats,
 // CountByStatus counts files by status for a session.
 func (s *FileStore) CountByStatus(ctx context.Context, sessionID string) (map[string]int64, error) {
 	query := `
-    SELECT status, COUNT(*) as count 
-    FROM files 
-    WHERE session_id = $1 
+    SELECT status, COUNT(*) as count
+    FROM files
+    WHERE session_id = $1
     GROUP BY status`
 
 	rows, err := s.db.QueryContext(ctx, query, sessionID)
@@ -452,10 +452,10 @@ func (s *FileStore) CountByStatus(ctx context.Context, sessionID string) (map[st
 func (s *FileStore) GetFailedFiles(ctx context.Context, sessionID string, maxAttempts int) ([]*File, error) {
 	var files []*File
 	query := `
-    SELECT * FROM files 
-    WHERE session_id = $1 
-      AND status = $2 
-      AND download_attempts < $3 
+    SELECT * FROM files
+    WHERE session_id = $1
+      AND status = $2
+      AND download_attempts < $3
     ORDER BY download_attempts ASC, size ASC`
 
 	err := s.db.SelectContext(ctx, &files, query, sessionID, FileStatusFailed, maxAttempts)
@@ -469,10 +469,10 @@ func (s *FileStore) GetFailedFiles(ctx context.Context, sessionID string, maxAtt
 // ResetFailedFiles resets failed files to pending status.
 func (s *FileStore) ResetFailedFiles(ctx context.Context, sessionID string, maxAttempts int) (int64, error) {
 	query := `
-    UPDATE files 
-    SET status = $1, error_message = NULL 
-    WHERE session_id = $2 
-      AND status = $3 
+    UPDATE files
+    SET status = $1, error_message = NULL
+    WHERE session_id = $2
+      AND status = $3
       AND download_attempts < $4`
 
 	result, err := s.db.ExecContext(ctx, query, FileStatusPending, sessionID, FileStatusFailed, maxAttempts)
@@ -546,8 +546,8 @@ func (s *FileStore) CreateChunks(ctx context.Context, fileID string, chunkSize i
 func (s *FileStore) GetChunks(ctx context.Context, fileID string) ([]*DownloadChunk, error) {
 	var chunks []*DownloadChunk
 	query := `
-    SELECT * FROM download_chunks 
-    WHERE file_id = $1 
+    SELECT * FROM download_chunks
+    WHERE file_id = $1
     ORDER BY chunk_index`
 
 	err := s.db.SelectContext(ctx, &chunks, query, fileID)

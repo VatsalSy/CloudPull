@@ -105,7 +105,6 @@ func Example() {
 	}
 }
 
-
 // ExampleResumeSession shows how to resume a session.
 func ExampleResumeSession() {
 	// Create application instance with proper error handling
@@ -249,7 +248,7 @@ func ExampleRobustErrorHandling() {
 		// Create context with timeout for sync operation
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		
+
 		options := &SyncOptions{
 			IncludePatterns: []string{"*.pdf"},
 			MaxDepth:        3,

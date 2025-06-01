@@ -14,14 +14,14 @@ fi
 # Run gosec
 if ! gosec -fmt json -out /tmp/gosec-report.json ./... 2>/dev/null; then
   echo "Security issues found!"
-  
+
   # Parse and display issues
   if command -v jq &> /dev/null; then
     jq -r '.Issues[] | "[\(.severity)] \(.file):\(.line):\(.column) - \(.rule_id): \(.details)"' /tmp/gosec-report.json
   else
     cat /tmp/gosec-report.json
   fi
-  
+
   rm -f /tmp/gosec-report.json
   echo ""
   echo "Please fix security issues before committing"

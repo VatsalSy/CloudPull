@@ -36,19 +36,19 @@ import (
 
 // App is the main application coordinator.
 type App struct {
-	config        *config.Config
+	errorHandler  *errors.Handler
 	logger        *logger.Logger
 	authManager   *api.AuthManager
 	apiClient     *api.DriveClient
 	stateManager  *state.Manager
 	syncEngine    *cloudsync.Engine
-	errorHandler  *errors.Handler
+	config        *config.Config
 	shutdownChan  chan struct{}
+	configLoader  func() (*config.Config, error)
 	mu            sync.RWMutex
 	shutdownOnce  sync.Once
 	isInitialized bool
 	isRunning     bool
-	configLoader  func() (*config.Config, error)
 }
 
 // Option is a functional option for configuring the App.
@@ -69,11 +69,11 @@ func New(opts ...Option) (*App, error) {
 			return config.Load("")
 		}, // default to global config loader
 	}
-	
+
 	for _, opt := range opts {
 		opt(app)
 	}
-	
+
 	return app, nil
 }
 
@@ -751,7 +751,6 @@ type SyncOptions struct {
 }
 
 // Helper functions
-
 
 // GetAllSessions returns all sync sessions.
 func (app *App) GetAllSessions() ([]*state.Session, error) {

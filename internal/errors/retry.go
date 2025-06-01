@@ -63,7 +63,7 @@ func NewExponentialBackoff(config *BackoffConfig) *ExponentialBackoff {
 		config:          config,
 		currentInterval: config.InitialInterval,
 		startTime:       time.Now(),
-		rand:            rand.New(rand.NewSource(time.Now().UnixNano())),
+		rand:            rand.New(rand.NewSource(time.Now().UnixNano())), //nolint:gosec // Using math/rand for jitter is acceptable
 	}
 }
 
@@ -145,7 +145,7 @@ func calculateBackoff(
 	if jitter {
 		// Add up to 25% jitter
 		jitterAmount := backoff * 0.25
-		jitterValue := (rand.Float64()*2 - 1) * jitterAmount // -25% to +25%
+		jitterValue := (rand.Float64()*2 - 1) * jitterAmount //nolint:gosec // Using math/rand for jitter is acceptable
 		backoff += jitterValue
 	}
 

@@ -6,6 +6,19 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Ensure Go bin directory is in PATH
+GOPATH_BIN="$(go env GOPATH)/bin"
+export PATH="$PATH:$GOPATH_BIN"
+
+# Ensure Ruby gem bin directory is in PATH
+if command -v gem >/dev/null 2>&1; then
+  GEM_BIN="$(gem environment gemdir)/bin"
+  export PATH="$PATH:$GEM_BIN"
+  # Also add user gem path
+  USER_GEM_BIN="$(ruby -r rubygems -e 'puts Gem.user_dir')/bin"
+  export PATH="$PATH:$USER_GEM_BIN"
+fi
+
 echo "CloudPull Pre-commit Hook Installer"
 echo "==================================="
 echo ""
@@ -24,7 +37,7 @@ command_exists() {
 # Function to install pre-commit
 install_precommit() {
   echo "Installing pre-commit..."
-  
+
   if command_exists pip3; then
     pip3 install --user pre-commit
   elif command_exists pip; then
@@ -41,7 +54,7 @@ install_precommit() {
 # Function to install golangci-lint
 install_golangci_lint() {
   echo "Installing golangci-lint..."
-  
+
   # Try to install using go install
   if command_exists go; then
     go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
@@ -57,7 +70,7 @@ install_golangci_lint() {
 # Function to install gosec
 install_gosec() {
   echo "Installing gosec..."
-  
+
   if command_exists go; then
     go install github.com/securego/gosec/v2/cmd/gosec@latest
   else
@@ -69,7 +82,7 @@ install_gosec() {
 # Function to install markdownlint
 install_markdownlint() {
   echo "Installing markdownlint..."
-  
+
   if command_exists gem; then
     gem install --user-install mdl
   elif command_exists brew; then
@@ -83,7 +96,7 @@ install_markdownlint() {
 # Function to install shellcheck
 install_shellcheck() {
   echo "Installing shellcheck..."
-  
+
   if command_exists brew; then
     brew install shellcheck
   elif command_exists apt-get; then
@@ -104,6 +117,11 @@ echo ""
 if ! command_exists pre-commit; then
   echo "pre-commit not found"
   install_precommit
+  # Re-check after installation
+  if ! command_exists pre-commit; then
+    echo "Error: pre-commit installation failed"
+    exit 1
+  fi
 else
   echo "✓ pre-commit is installed"
 fi
@@ -112,6 +130,11 @@ fi
 if ! command_exists golangci-lint; then
   echo "golangci-lint not found"
   install_golangci_lint
+  # Re-check after installation
+  if ! command_exists golangci-lint; then
+    echo "Warning: golangci-lint not in PATH after installation"
+    echo "It may be installed at: $(go env GOPATH)/bin/golangci-lint"
+  fi
 else
   echo "✓ golangci-lint is installed"
 fi
@@ -128,6 +151,11 @@ fi
 if ! command_exists mdl; then
   echo "markdownlint not found"
   install_markdownlint
+  # Re-check after installation
+  if ! command_exists mdl; then
+    echo "Warning: markdownlint not in PATH after installation"
+    echo "You may need to add Ruby gems to your PATH"
+  fi
 else
   echo "✓ markdownlint is installed"
 fi
@@ -201,10 +229,12 @@ fi
 
 # Create .gitignore entries if needed
 if ! grep -q "coverage.out" "$PROJECT_ROOT/.gitignore" 2>/dev/null; then
-  echo "" >> "$PROJECT_ROOT/.gitignore"
-  echo "# Test coverage" >> "$PROJECT_ROOT/.gitignore"
-  echo "coverage.out" >> "$PROJECT_ROOT/.gitignore"
-  echo "coverage.html" >> "$PROJECT_ROOT/.gitignore"
+  {
+    echo ""
+    echo "# Test coverage"
+    echo "coverage.out"
+    echo "coverage.html"
+  } >> "$PROJECT_ROOT/.gitignore"
 fi
 
 # Run pre-commit on all files to check current state
@@ -234,3 +264,16 @@ echo ""
 echo "To bypass hooks temporarily (not recommended):"
 echo "  git commit --no-verify"
 echo ""
+
+# Check if any tools might not be in PATH
+if ! command_exists golangci-lint || ! command_exists gosec || ! command_exists mdl; then
+  echo "⚠️  Some tools may not be in your PATH. Add these to your shell profile:"
+  echo ""
+  if ! command_exists golangci-lint || ! command_exists gosec; then
+    echo "  export PATH=\"\$PATH:$(go env GOPATH)/bin\""
+  fi
+  if ! command_exists mdl; then
+    echo "  export PATH=\"\$PATH:$(ruby -r rubygems -e 'puts Gem.user_dir')/bin\""
+  fi
+  echo ""
+fi

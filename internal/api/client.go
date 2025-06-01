@@ -33,16 +33,16 @@ import (
  */
 
 const (
-	// Default page size for listing files
+	// Default page size for listing files.
 	defaultPageSize = 1000
 
-	// Maximum number of retries for API calls
+	// Maximum number of retries for API calls.
 	maxRetries = 3
 
-	// Base delay for exponential backoff
+	// Base delay for exponential backoff.
 	baseRetryDelay = time.Second
 
-	// Default chunk size for downloads (10MB)
+	// Default chunk size for downloads (10MB).
 	defaultChunkSize = 10 * 1024 * 1024
 )
 

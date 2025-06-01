@@ -2,7 +2,7 @@ package util
 
 import "fmt"
 
-// FormatBytes converts bytes to human-readable format
+// FormatBytes converts bytes to human-readable format.
 func FormatBytes(bytes int64) string {
 	const unit = 1024
 	if bytes < unit {

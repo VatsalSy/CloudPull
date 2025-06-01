@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	
+
 	"github.com/VatsalSy/CloudPull/internal/logger"
 )
 
@@ -114,11 +114,11 @@ type EventBus struct {
 	handlers       map[EventType][]HandlerInfo
 	channels       map[string]chan Event
 	cancel         context.CancelFunc
+	logger         *logger.Logger
 	globalHandlers []HandlerInfo
 	wg             sync.WaitGroup
 	bufferSize     int
 	mu             sync.RWMutex
-	logger         *logger.Logger
 }
 
 // HandlerInfo contains handler metadata.
@@ -346,7 +346,7 @@ func (eb *EventBus) sendToChannels(event Event) {
 func (eb *EventBus) processHandlers(event Event) {
 	// Copy handlers to avoid holding lock during execution
 	var handlersToCall []HandlerInfo
-	
+
 	eb.mu.RLock()
 	// Process type-specific handlers
 	if handlers, exists := eb.handlers[event.Type]; exists {
@@ -366,7 +366,7 @@ func (eb *EventBus) processHandlers(event Event) {
 		}
 	}
 	eb.mu.RUnlock()
-	
+
 	// Call handlers without holding the lock
 	for _, info := range handlersToCall {
 		eb.callHandler(info.Handler, event)
@@ -379,7 +379,7 @@ func (eb *EventBus) callHandler(handler EventHandler, event Event) {
 		if r := recover(); r != nil {
 			// Log panic but don't crash
 			if eb.logger != nil {
-				eb.logger.Error(fmt.Errorf("panic in event handler: %v", r), 
+				eb.logger.Error(fmt.Errorf("panic in event handler: %v", r),
 					"Event handler panicked",
 					"event_type", event.Type.String(),
 					"panic", r,

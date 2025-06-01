@@ -26,16 +26,16 @@ import (
  */
 
 const (
-	// Default rate limit (requests per second)
+	// Default rate limit (requests per second).
 	defaultRateLimit = 10
 
-	// Default burst size
+	// Default burst size.
 	defaultBurstSize = 20
 
-	// Rate limit for batch operations
+	// Rate limit for batch operations.
 	batchRateLimit = 5
 
-	// Rate limit for export operations (lower due to higher server load)
+	// Rate limit for export operations (lower due to higher server load).
 	exportRateLimit = 3
 )
 
@@ -111,12 +111,12 @@ func (rl *RateLimiter) waitWithLimiter(ctx context.Context, limiter *rate.Limite
 
 	// Create reservation
 	reservation := limiter.Reserve()
-	
+
 	// Check if reservation was successful
 	if !reservation.OK() {
 		return errors.New(errors.ErrorTypeAPI, "rate_limit_reservation_failed", "rate limiter reservation failed", nil)
 	}
-	
+
 	delay := reservation.Delay()
 
 	// If delay is zero, we can proceed immediately
@@ -148,7 +148,7 @@ func (rl *RateLimiter) TryAcquire() bool {
 // SetRateLimit updates the rate limit dynamically.
 func (rl *RateLimiter) SetRateLimit(rateLimit int) {
 	rl.limiter.SetLimit(rate.Limit(rateLimit))
-	
+
 	// Update batch and export limiters proportionally
 	// Batch limiter typically has 50% of main rate limit
 	batchRate := rateLimit / 2
@@ -156,7 +156,7 @@ func (rl *RateLimiter) SetRateLimit(rateLimit int) {
 		batchRate = 1
 	}
 	rl.batchLimiter.SetLimit(rate.Limit(batchRate))
-	
+
 	// Export limiter typically has 30% of main rate limit
 	exportRate := rateLimit * 3 / 10
 	if exportRate < 1 {
@@ -168,12 +168,12 @@ func (rl *RateLimiter) SetRateLimit(rateLimit int) {
 // SetBurstSize updates the burst size dynamically.
 func (rl *RateLimiter) SetBurstSize(burstSize int) {
 	rl.limiter.SetBurst(burstSize)
-	
+
 	// Update batch and export limiters proportionally
 	// Batch limiter has double its rate limit as burst
 	batchRate := int(rl.batchLimiter.Limit())
 	rl.batchLimiter.SetBurst(batchRate * 2)
-	
+
 	// Export limiter has same burst as its rate limit
 	exportRate := int(rl.exportLimiter.Limit())
 	rl.exportLimiter.SetBurst(exportRate)
@@ -186,7 +186,7 @@ func (rl *RateLimiter) GetMetrics() RateLimiterMetrics {
 
 	duration := time.Since(rl.lastResetTime)
 	requestsPerSecond := float64(rl.totalRequests) / duration.Seconds()
-	
+
 	// Calculate block rate with zero check to prevent divide-by-zero
 	var blockRate float64
 	if rl.totalRequests > 0 {

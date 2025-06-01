@@ -154,7 +154,7 @@ func NewDownloadManager(
 // Start starts the download manager.
 func (dm *DownloadManager) Start(ctx context.Context) error {
 	dm.ctx, dm.cancel = context.WithCancel(ctx)
-	
+
 	// Clean up old temporary files from previous runs
 	if err := dm.cleanupTempFiles(); err != nil {
 		dm.logger.Warn("Failed to cleanup temp files", "error", err)
@@ -211,7 +211,7 @@ func (dm *DownloadManager) ScheduleBatch(files []*state.File) error {
 	dm.logger.Info("Scheduling batch of files",
 		"batch_size", len(files),
 	)
-	
+
 	// Sort by size (smallest first) for better throughput
 	priorityMap := dm.calculatePriorities(files)
 
@@ -227,7 +227,7 @@ func (dm *DownloadManager) ScheduleBatch(files []*state.File) error {
 			scheduled++
 		}
 	}
-	
+
 	dm.logger.Info("Batch scheduling complete",
 		"scheduled", scheduled,
 		"total", len(files),
@@ -561,7 +561,6 @@ func (dm *DownloadManager) moveToFinal(tempPath, finalPath string) error {
 	return nil
 }
 
-
 // calculatePriorities calculates download priorities based on file size.
 func (dm *DownloadManager) calculatePriorities(files []*state.File) map[string]int {
 	priorities := make(map[string]int)
@@ -621,20 +620,20 @@ func (dm *DownloadManager) cleanupTempFiles() error {
 		}
 		return true
 	})
-	
+
 	// Then, clean up all files in temp directory from previous runs
 	if dm.tempDir != "" {
 		// Create temp directory if it doesn't exist
 		if err := os.MkdirAll(dm.tempDir, 0750); err != nil {
 			return errors.Wrap(err, "failed to create temp directory")
 		}
-		
+
 		// Read all files in temp directory
 		entries, err := os.ReadDir(dm.tempDir)
 		if err != nil {
 			return errors.Wrap(err, "failed to read temp directory")
 		}
-		
+
 		// Remove all files (they're all temporary from previous runs)
 		removedCount := 0
 		for _, entry := range entries {
@@ -647,12 +646,12 @@ func (dm *DownloadManager) cleanupTempFiles() error {
 				}
 			}
 		}
-		
+
 		if removedCount > 0 {
 			dm.logger.Info("Cleaned up old temporary files", "count", removedCount, "directory", dm.tempDir)
 		}
 	}
-	
+
 	return nil
 }
 

@@ -347,14 +347,13 @@ func flattenMap(prefix string, m map[string]interface{}) map[string]interface{} 
 	return result
 }
 
-// getAllValidKeys dynamically generates the list of valid configuration keys
-// by reflecting on the config.Config struct and its nested fields
+// by reflecting on the config.Config struct and its nested fields.
 func getAllValidKeys() []string {
 	cfg := &config.Config{}
 	return extractKeysFromStruct(reflect.TypeOf(*cfg), "")
 }
 
-// extractKeysFromStruct recursively extracts all configuration keys from a struct
+// extractKeysFromStruct recursively extracts all configuration keys from a struct.
 func extractKeysFromStruct(t reflect.Type, prefix string) []string {
 	var keys []string
 

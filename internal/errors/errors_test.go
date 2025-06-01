@@ -229,7 +229,8 @@ func TestHandler(t *testing.T) {
 		assert.NotNil(t, err.Retry)
 		assert.Equal(t, 1, err.Retry.Attempt)
 		assert.Equal(t, 5, err.Retry.MaxAttempts)
-		assert.True(t, err.Retry.BackoffDuration >= 1*time.Second)
+		// With jitter enabled, backoff can be ±25%, so minimum is 0.75s
+		assert.True(t, err.Retry.BackoffDuration >= 750*time.Millisecond)
 
 		// Second retry
 		previousBackoff := err.Retry.BackoffDuration

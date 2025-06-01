@@ -23,17 +23,17 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// SessionStore handles session-related database operations
+// SessionStore handles session-related database operations.
 type SessionStore struct {
 	db DBInterface
 }
 
-// NewSessionStore creates a new session store
+// NewSessionStore creates a new session store.
 func NewSessionStore(db *DB) *SessionStore {
 	return &SessionStore{db: db}
 }
 
-// Create creates a new session
+// Create creates a new session.
 func (s *SessionStore) Create(ctx context.Context, session *Session) error {
 	query := `
     INSERT INTO sessions (
@@ -65,7 +65,7 @@ func (s *SessionStore) Create(ctx context.Context, session *Session) error {
 	return nil
 }
 
-// Get retrieves a session by ID
+// Get retrieves a session by ID.
 func (s *SessionStore) Get(ctx context.Context, id string) (*Session, error) {
 	var session Session
 	query := `SELECT * FROM sessions WHERE id = $1`
@@ -81,7 +81,7 @@ func (s *SessionStore) Get(ctx context.Context, id string) (*Session, error) {
 	return &session, nil
 }
 
-// GetActive retrieves all active sessions
+// GetActive retrieves all active sessions.
 func (s *SessionStore) GetActive(ctx context.Context) ([]*Session, error) {
 	var sessions []*Session
 	query := `SELECT * FROM sessions WHERE status = $1 ORDER BY start_time DESC`
@@ -94,7 +94,7 @@ func (s *SessionStore) GetActive(ctx context.Context) ([]*Session, error) {
 	return sessions, nil
 }
 
-// GetByStatus retrieves sessions by status
+// GetByStatus retrieves sessions by status.
 func (s *SessionStore) GetByStatus(ctx context.Context, status string) ([]*Session, error) {
 	var sessions []*Session
 	query := `SELECT * FROM sessions WHERE status = $1 ORDER BY start_time DESC`
@@ -107,7 +107,7 @@ func (s *SessionStore) GetByStatus(ctx context.Context, status string) ([]*Sessi
 	return sessions, nil
 }
 
-// List retrieves sessions with pagination
+// List retrieves sessions with pagination.
 func (s *SessionStore) List(ctx context.Context, limit, offset int) ([]*Session, error) {
 	var sessions []*Session
 	query := `SELECT * FROM sessions ORDER BY start_time DESC LIMIT $1 OFFSET $2`
@@ -120,7 +120,7 @@ func (s *SessionStore) List(ctx context.Context, limit, offset int) ([]*Session,
 	return sessions, nil
 }
 
-// Update updates a session
+// Update updates a session.
 func (s *SessionStore) Update(ctx context.Context, session *Session) error {
 	query := `
     UPDATE sessions SET
@@ -153,7 +153,7 @@ func (s *SessionStore) Update(ctx context.Context, session *Session) error {
 	return nil
 }
 
-// UpdateStatus updates the session status
+// UpdateStatus updates the session status.
 func (s *SessionStore) UpdateStatus(ctx context.Context, id, status string) error {
 	query := `UPDATE sessions SET status = $1, updated_at = $2 WHERE id = $3 AND updated_at = (
 		SELECT updated_at FROM sessions WHERE id = $3
@@ -176,7 +176,7 @@ func (s *SessionStore) UpdateStatus(ctx context.Context, id, status string) erro
 	return nil
 }
 
-// UpdateProgress updates session progress counters
+// UpdateProgress updates session progress counters.
 func (s *SessionStore) UpdateProgress(ctx context.Context, id string, delta SessionProgressDelta) error {
 	query := `
     UPDATE sessions SET
@@ -215,11 +215,11 @@ func (s *SessionStore) UpdateProgress(ctx context.Context, id string, delta Sess
 	return nil
 }
 
-// Complete marks a session as completed
+// Complete marks a session as completed.
 func (s *SessionStore) Complete(ctx context.Context, id string) error {
 	query := `
-    UPDATE sessions 
-    SET status = $1, end_time = $2 
+    UPDATE sessions
+    SET status = $1, end_time = $2
     WHERE id = $3 AND status = $4`
 
 	result, err := s.db.ExecContext(ctx, query,
@@ -244,21 +244,21 @@ func (s *SessionStore) Complete(ctx context.Context, id string) error {
 	return nil
 }
 
-// Pause marks a session as paused
+// Pause marks a session as paused.
 func (s *SessionStore) Pause(ctx context.Context, id string) error {
 	return s.UpdateStatus(ctx, id, SessionStatusPaused)
 }
 
-// Resume marks a session as active
+// Resume marks a session as active.
 func (s *SessionStore) Resume(ctx context.Context, id string) error {
 	return s.UpdateStatus(ctx, id, SessionStatusActive)
 }
 
-// Cancel marks a session as canceled
+// Cancel marks a session as canceled.
 func (s *SessionStore) Cancel(ctx context.Context, id string) error {
 	query := `
-    UPDATE sessions 
-    SET status = $1, end_time = $2 
+    UPDATE sessions
+    SET status = $1, end_time = $2
     WHERE id = $3 AND status IN ($4, $5)`
 
 	result, err := s.db.ExecContext(ctx, query,
@@ -284,7 +284,7 @@ func (s *SessionStore) Cancel(ctx context.Context, id string) error {
 	return nil
 }
 
-// Delete deletes a session and all related data
+// Delete deletes a session and all related data.
 func (s *SessionStore) Delete(ctx context.Context, id string) error {
 	query := `DELETE FROM sessions WHERE id = $1`
 
@@ -305,7 +305,7 @@ func (s *SessionStore) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// GetSummary retrieves a session summary
+// GetSummary retrieves a session summary.
 func (s *SessionStore) GetSummary(ctx context.Context, id string) (*SessionSummary, error) {
 	var summary SessionSummary
 	query := `SELECT * FROM session_summary WHERE id = $1`
@@ -321,7 +321,7 @@ func (s *SessionStore) GetSummary(ctx context.Context, id string) (*SessionSumma
 	return &summary, nil
 }
 
-// ListSummaries retrieves session summaries with pagination
+// ListSummaries retrieves session summaries with pagination.
 func (s *SessionStore) ListSummaries(ctx context.Context, limit, offset int) ([]*SessionSummary, error) {
 	var summaries []*SessionSummary
 	query := `SELECT * FROM session_summary ORDER BY start_time DESC LIMIT $1 OFFSET $2`
@@ -334,12 +334,12 @@ func (s *SessionStore) ListSummaries(ctx context.Context, limit, offset int) ([]
 	return summaries, nil
 }
 
-// GetResumableSessions retrieves sessions that can be resumed
+// GetResumableSessions retrieves sessions that can be resumed.
 func (s *SessionStore) GetResumableSessions(ctx context.Context) ([]*Session, error) {
 	var sessions []*Session
 	query := `
-    SELECT * FROM sessions 
-    WHERE status IN ($1, $2) 
+    SELECT * FROM sessions
+    WHERE status IN ($1, $2)
     ORDER BY start_time DESC`
 
 	err := s.db.SelectContext(ctx, &sessions, query, SessionStatusPaused, SessionStatusFailed)
@@ -350,7 +350,7 @@ func (s *SessionStore) GetResumableSessions(ctx context.Context) ([]*Session, er
 	return sessions, nil
 }
 
-// SessionProgressDelta represents changes to session progress counters
+// SessionProgressDelta represents changes to session progress counters.
 type SessionProgressDelta struct {
 	TotalFiles     int64
 	CompletedFiles int64
@@ -360,7 +360,7 @@ type SessionProgressDelta struct {
 	CompletedBytes int64
 }
 
-// WithTx returns a SessionStore that uses the given transaction
+// WithTx returns a SessionStore that uses the given transaction.
 func (s *SessionStore) WithTx(tx *sqlx.Tx) *SessionStore {
 	return &SessionStore{
 		db: WrapTx(tx),

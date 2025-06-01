@@ -21,31 +21,31 @@ import (
 type ErrorType int
 
 const (
-	// ErrorTypeUnknown represents an unknown error
+	// ErrorTypeUnknown represents an unknown error.
 	ErrorTypeUnknown ErrorType = iota
 
-	// ErrorTypeNetwork represents network-related errors (transient)
+	// ErrorTypeNetwork represents network-related errors (transient).
 	ErrorTypeNetwork
 
-	// ErrorTypeAPIQuota represents API rate limit or quota errors
+	// ErrorTypeAPIQuota represents API rate limit or quota errors.
 	ErrorTypeAPIQuota
 
-	// ErrorTypePermission represents permission/authorization errors (permanent)
+	// ErrorTypePermission represents permission/authorization errors (permanent).
 	ErrorTypePermission
 
-	// ErrorTypeStorage represents storage-related errors (may be transient)
+	// ErrorTypeStorage represents storage-related errors (may be transient).
 	ErrorTypeStorage
 
-	// ErrorTypeCorruption represents data corruption errors
+	// ErrorTypeCorruption represents data corruption errors.
 	ErrorTypeCorruption
 
-	// ErrorTypeConfiguration represents configuration errors
+	// ErrorTypeConfiguration represents configuration errors.
 	ErrorTypeConfiguration
 
-	// ErrorTypeContext represents context cancellation or timeout
+	// ErrorTypeContext represents context cancellation or timeout.
 	ErrorTypeContext
 
-	// ErrorTypeAPI represents general API errors
+	// ErrorTypeAPI represents general API errors.
 	ErrorTypeAPI
 )
 

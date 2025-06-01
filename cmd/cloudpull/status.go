@@ -274,22 +274,22 @@ func showSystemStats() {
 }
 
 type ActiveSession struct {
-	ID                  string
 	StartTime           time.Time
+	CurrentFile         string
 	Source              string
 	Destination         string
+	ID                  string
+	RecentFiles         []CompletedFile
 	TotalFiles          int
-	CompletedFiles      int
-	TotalBytes          int64
 	DownloadedBytes     int64
 	Speed               int64
 	AvgSpeed            int64
 	PeakSpeed           int64
 	ETA                 time.Duration
-	CurrentFile         string
+	TotalBytes          int64
 	CurrentFileSize     int64
 	CurrentFileProgress float64
-	RecentFiles         []CompletedFile
+	CompletedFiles      int
 }
 
 type CompletedFile struct {
@@ -454,9 +454,9 @@ func getMemoryStats() (used, total int64) {
 
 // SyncSession represents a completed sync session.
 type SyncSession struct {
-	ID         string
 	StartTime  time.Time
 	EndTime    time.Time
+	ID         string
 	Duration   time.Duration
 	TotalFiles int
 	TotalBytes int64

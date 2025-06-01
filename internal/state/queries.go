@@ -53,7 +53,7 @@ type SessionProgress struct {
 func (q *QueryBuilder) GetSessionProgress(ctx context.Context, sessionID string) (*SessionProgress, error) {
 	query := `
     WITH folder_stats AS (
-      SELECT 
+      SELECT
         COUNT(*) as total_folders,
         SUM(CASE WHEN status = 'scanned' THEN 1 ELSE 0 END) as scanned_folders
       FROM folders
@@ -64,7 +64,7 @@ func (q *QueryBuilder) GetSessionProgress(ctx context.Context, sessionID string)
       FROM sessions s
       WHERE s.id = $1
     )
-    SELECT 
+    SELECT
       s.id as session_id,
       s.root_folder_name,
       s.status,
@@ -77,11 +77,11 @@ func (q *QueryBuilder) GetSessionProgress(ctx context.Context, sessionID string)
       s.failed_files,
       s.total_bytes,
       s.completed_bytes,
-      CASE 
+      CASE
         WHEN ct.elapsed_seconds > 0 THEN s.completed_bytes / ct.elapsed_seconds
         ELSE 0
       END as transfer_rate,
-      CASE 
+      CASE
         WHEN s.completed_bytes > 0 AND s.completed_bytes < s.total_bytes THEN
           (s.total_bytes - s.completed_bytes) / (s.completed_bytes / ct.elapsed_seconds)
         ELSE 0
@@ -117,7 +117,7 @@ type FolderTree struct {
 // GetFolderTree retrieves the folder tree structure with statistics.
 func (q *QueryBuilder) GetFolderTree(ctx context.Context, sessionID string, parentID *string) ([]*FolderTree, error) {
 	query := `
-    SELECT 
+    SELECT
       f.id,
       f.drive_id,
       f.parent_id,
@@ -164,7 +164,7 @@ type ErrorSummary struct {
 // GetErrorSummary retrieves error summary for a session.
 func (q *QueryBuilder) GetErrorSummary(ctx context.Context, sessionID string) ([]*ErrorSummary, error) {
 	query := `
-    SELECT 
+    SELECT
       error_type,
       error_code,
       item_type,
@@ -233,7 +233,7 @@ func (q *QueryBuilder) GetResumableState(ctx context.Context, sessionID string) 
 
 	// Get partial downloads
 	partialQuery := `
-    SELECT 
+    SELECT
       id as file_id,
       name,
       path,
@@ -241,8 +241,8 @@ func (q *QueryBuilder) GetResumableState(ctx context.Context, sessionID string) 
       bytes_downloaded,
       ROUND(CAST(bytes_downloaded AS FLOAT) / size * 100, 2) as progress
     FROM files
-    WHERE session_id = $1 
-      AND status = $2 
+    WHERE session_id = $1
+      AND status = $2
       AND bytes_downloaded > 0
     ORDER BY bytes_downloaded DESC`
 
@@ -303,7 +303,7 @@ type DuplicateFile struct {
 // FindDuplicates finds duplicate files in a session.
 func (q *QueryBuilder) FindDuplicates(ctx context.Context, sessionID string) ([]*DuplicateFile, error) {
 	query := `
-    SELECT 
+    SELECT
       f1.drive_id as drive_id1,
       f2.drive_id as drive_id2,
       f1.name,
@@ -312,7 +312,7 @@ func (q *QueryBuilder) FindDuplicates(ctx context.Context, sessionID string) ([]
       f2.path as path2,
       f1.md5_checksum as checksum
     FROM files f1
-    JOIN files f2 ON 
+    JOIN files f2 ON
       f1.session_id = f2.session_id
       AND f1.name = f2.name
       AND f1.size = f2.size
@@ -336,8 +336,8 @@ func (q *QueryBuilder) SearchFiles(ctx context.Context, sessionID string, patter
 	pattern = "%" + strings.ReplaceAll(pattern, "%", "\\%") + "%"
 
 	query := `
-    SELECT * FROM files 
-    WHERE session_id = $1 
+    SELECT * FROM files
+    WHERE session_id = $1
       AND name LIKE $2 ESCAPE '\'
     ORDER BY name
     LIMIT $3`
@@ -354,9 +354,9 @@ func (q *QueryBuilder) SearchFiles(ctx context.Context, sessionID string, patter
 // GetLargeFiles retrieves the largest files in a session.
 func (q *QueryBuilder) GetLargeFiles(ctx context.Context, sessionID string, limit int) ([]*File, error) {
 	query := `
-    SELECT * FROM files 
-    WHERE session_id = $1 
-    ORDER BY size DESC 
+    SELECT * FROM files
+    WHERE session_id = $1
+    ORDER BY size DESC
     LIMIT $2`
 
 	var files []*File
@@ -373,8 +373,8 @@ func (q *QueryBuilder) GetOldestSessions(ctx context.Context, olderThan time.Dur
 	cutoff := time.Now().Add(-olderThan)
 
 	query := `
-    SELECT * FROM sessions 
-    WHERE created_at < $1 
+    SELECT * FROM sessions
+    WHERE created_at < $1
     ORDER BY created_at ASC`
 
 	var sessions []*Session
@@ -391,8 +391,8 @@ func (q *QueryBuilder) CleanupOldSessions(ctx context.Context, olderThan time.Du
 	cutoff := time.Now().Add(-olderThan)
 
 	query := `
-    DELETE FROM sessions 
-    WHERE created_at < $1 
+    DELETE FROM sessions
+    WHERE created_at < $1
       AND status IN ($2, $3, $4)`
 
 	result, err := q.db.ExecContext(ctx, query, cutoff,

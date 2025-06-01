@@ -34,10 +34,10 @@ import (
 type TraversalStrategy int
 
 const (
-	// TraversalBFS performs breadth-first search traversal
+	// TraversalBFS performs breadth-first search traversal.
 	TraversalBFS TraversalStrategy = iota
 
-	// TraversalDFS performs depth-first search traversal
+	// TraversalDFS performs depth-first search traversal.
 	TraversalDFS
 )
 

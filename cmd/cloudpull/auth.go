@@ -19,7 +19,7 @@ This command initiates the OAuth2 authentication flow to authorize
 CloudPull to access your Google Drive files.`,
 	Example: `  # Start authentication
   cloudpull auth
-  
+
   # Re-authenticate (replace existing credentials)
   cloudpull auth --force`,
 	RunE: runAuth,

@@ -49,10 +49,10 @@ err := performOperation()
 if err != nil {
     // Wrap with context
     wrappedErr := errors.WrapWithContext(ctx, err, "operation_name", "/path/to/resource")
-    
+
     // Determine recovery strategy
     strategy := handler.HandleError(ctx, wrappedErr)
-    
+
     // Execute recovery
     if strategy != errors.RecoveryStrategyNone {
         err = handler.RecoverWithStrategy(ctx, wrappedErr, strategy, func() error {
@@ -96,7 +96,7 @@ for _, item := range items {
 // Handle batch errors
 if batch.HasErrors() {
     strategies := handler.HandleBatchErrors(ctx, batch)
-    
+
     // Retry retryable errors
     for _, err := range batch.RetryableErrors() {
         strategy := strategies[err]
@@ -151,13 +151,13 @@ for {
         adaptiveBackoff.RecordSuccess()
         break
     }
-    
+
     adaptiveBackoff.RecordError(errorType)
     backoff := adaptiveBackoff.NextBackOff()
     if backoff < 0 {
         return err // Max time exceeded
     }
-    
+
     time.Sleep(backoff)
 }
 ```

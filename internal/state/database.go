@@ -107,7 +107,7 @@ func (db *DB) InitSchema(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	
+
 	// Track whether commit was successful
 	committed := false
 	defer func() {

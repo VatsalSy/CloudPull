@@ -670,7 +670,7 @@ func (e *Engine) cleanup() {
 
 	// Save final checkpoint
 	e.saveCheckpoint()
-	
+
 	// Close done channel to signal completion
 	close(e.doneChan)
 }
@@ -744,7 +744,7 @@ func (e *Engine) getStatus() string {
 	if e.isPaused {
 		return "paused"
 	}
-	
+
 	// Check if sync is complete
 	if e.walkingComplete {
 		stats := e.progressTracker.GetStats()
@@ -758,7 +758,7 @@ func (e *Engine) getStatus() string {
 			}
 		}
 	}
-	
+
 	return "running"
 }
 

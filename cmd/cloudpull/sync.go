@@ -156,7 +156,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			// Handle user cancellation or I/O errors
 			if err.Error() == "interrupt" {
-				return fmt.Errorf("sync cancelled by user")
+				return fmt.Errorf("sync canceled by user")
 			}
 			return fmt.Errorf("failed to get user confirmation: %w", err)
 		}
@@ -295,7 +295,7 @@ func extractFolderID(input string) string {
 	return ""
 }
 
-// isValidDriveID validates if a string matches the Google Drive ID pattern
+// isValidDriveID validates if a string matches the Google Drive ID pattern.
 func isValidDriveID(id string) bool {
 	// Google Drive IDs are typically 10+ characters containing alphanumeric, underscore, and hyphen
 	matched, _ := regexp.MatchString(`^[a-zA-Z0-9_-]{10,}$`, id)

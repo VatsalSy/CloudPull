@@ -9,22 +9,22 @@
 package state
 
 import (
-  "database/sql"
-  "time"
+	"database/sql"
+	"time"
 )
 
 // NewNullString creates a valid sql.NullString.
 func NewNullString(s string) sql.NullString {
-  return sql.NullString{
-    String: s,
-    Valid:  s != "",
-  }
+	return sql.NullString{
+		String: s,
+		Valid:  s != "",
+	}
 }
 
 // NewNullTime creates a valid sql.NullTime.
 func NewNullTime(t time.Time) sql.NullTime {
-  return sql.NullTime{
-    Time:  t,
-    Valid: !t.IsZero(),
-  }
+	return sql.NullTime{
+		Time:  t,
+		Valid: !t.IsZero(),
+	}
 }

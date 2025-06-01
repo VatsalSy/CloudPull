@@ -32,10 +32,10 @@ import (
  */
 
 const (
-	// Default token file permissions (owner read/write only)
+	// Default token file permissions (owner read/write only).
 	tokenFilePerms = 0600
 
-	// Token refresh buffer (refresh 5 minutes before expiry)
+	// Token refresh buffer (refresh 5 minutes before expiry).
 	tokenRefreshBuffer = 5 * time.Minute
 )
 
@@ -298,7 +298,7 @@ func (am *AuthManager) RevokeToken(ctx context.Context) error {
 		TokenType:    "",
 		Expiry:       time.Time{},
 	}
-	
+
 	if err := am.saveToken(emptyToken); err != nil {
 		return errors.Wrap(err, "failed to overwrite token file")
 	}

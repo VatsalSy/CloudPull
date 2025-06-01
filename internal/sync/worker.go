@@ -260,7 +260,7 @@ func (wp *WorkerPool) GetStats() *WorkerPoolStats {
 // dispatchTasks dispatches tasks from the priority queue to workers.
 func (wp *WorkerPool) dispatchTasks() {
 	defer wp.wg.Done()
-	
+
 	wp.logger.Debug("Task dispatcher started")
 
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -277,7 +277,7 @@ func (wp *WorkerPool) dispatchTasks() {
 			if queueSize > 0 {
 				wp.logger.Debug("Checking task queue", "queue_size", queueSize)
 			}
-			
+
 			// Process all available tasks in the queue
 			for {
 				// Check if there are tasks in the queue

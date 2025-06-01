@@ -12,49 +12,45 @@ patterns=(
   "auth[_-]?token"
   "private[_-]?key"
   "secret[_-]?key"
-  
+
   # Credentials
   "password"
   "passwd"
   "pwd"
   "credential"
-  
+
   # Google specific
   "client[_-]?secret"
   "refresh[_-]?token"
   "oauth[_-]?token"
-  
+
   # AWS
   "aws[_-]?access[_-]?key"
   "aws[_-]?secret"
-  
+
   # Other providers
   "github[_-]?token"
   "gitlab[_-]?token"
-  
-  # Private keys
-  "BEGIN RSA PRIVATE KEY"
-  "BEGIN DSA PRIVATE KEY"
-  "BEGIN EC PRIVATE KEY"
-  "BEGIN PRIVATE KEY"
-  "BEGIN OPENSSH PRIVATE KEY"
+
+  # Private keys (using regex to avoid false positive)
+  "BEGIN.*PRIVATE.*KEY"
 )
 
 # Files to check
-files="$@"
+files=("$@")
 
-if [ -z "$files" ]; then
+if [ ${#files[@]} -eq 0 ]; then
   exit 0
 fi
 
 found_sensitive=false
 
-for file in $files; do
+for file in "${files[@]}"; do
   # Skip binary files
   if file "$file" | grep -q "binary"; then
     continue
   fi
-  
+
   # Skip certain file types
   case "$file" in
     *.json|*.yaml|*.yml|*.env|*.conf|*.config|*.ini)

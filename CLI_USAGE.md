@@ -260,7 +260,7 @@ cloudpull completion powershell > cloudpull.ps1
    ```bash
    # List all sessions
    cloudpull resume
-   
+
    # Force resume
    cloudpull resume SESSION_ID --force
    ```
@@ -270,7 +270,7 @@ cloudpull completion powershell > cloudpull.ps1
    ```bash
    # Increase concurrent downloads
    cloudpull config set sync.max_concurrent 5
-   
+
    # Increase chunk size
    cloudpull config set sync.chunk_size 4MB
    ```

@@ -190,7 +190,6 @@ func TestSyncOptions(t *testing.T) {
 	assert.True(t, options.DryRun)
 }
 
-
 // Helper functions
 
 func setupTestConfig(t *testing.T) *viper.Viper {

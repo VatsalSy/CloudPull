@@ -25,7 +25,7 @@ import (
 type ProgressEventType string
 
 const (
-	// Progress event types as strings for better readability
+	// Progress event types as strings for better readability.
 	ProgressEventFileStarted     ProgressEventType = "file_started"
 	ProgressEventFileProgress    ProgressEventType = "file_progress"
 	ProgressEventFileCompleted   ProgressEventType = "file_completed"

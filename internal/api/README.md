@@ -85,7 +85,7 @@ results, err := downloader.DownloadFiles(ctx, tasks, progressFn)
 
 ```go
 // Export Google Docs as DOCX
-err := client.ExportFile(ctx, fileID, 
+err := client.ExportFile(ctx, fileID,
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     destPath, progressFn)
 ```

@@ -19,16 +19,16 @@ var (
 
 // Config represents the application configuration.
 type Config struct {
-	Files           FileConfig  `mapstructure:"files"`
+	viper           *viper.Viper
 	CredentialsFile string      `mapstructure:"credentials_file"`
 	TokenFile       string      `mapstructure:"token_file"`
 	Version         string      `mapstructure:"version"`
+	Files           FileConfig  `mapstructure:"files"`
 	Cache           CacheConfig `mapstructure:"cache"`
 	Log             LogConfig   `mapstructure:"log"`
 	Sync            SyncConfig  `mapstructure:"sync"`
 	API             APIConfig   `mapstructure:"api"`
 	Errors          ErrorConfig `mapstructure:"errors"`
-	viper           *viper.Viper
 }
 
 // SyncConfig contains sync-related settings.

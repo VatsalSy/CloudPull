@@ -120,8 +120,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 		DefaultSyncDir  string
 		MaxConcurrent   string
 		ChunkSize       string
-		EnableBandwidth bool
 		BandwidthLimit  string
+		EnableBandwidth bool
 	}
 
 	questions := []*survey.Question{
@@ -236,10 +236,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 			// Check for user cancellation or denial
 			var oauth2Err *oauth2.RetrieveError
 			if errors.As(err, &oauth2Err) && strings.Contains(oauth2Err.ErrorDescription, "access_denied") {
-				return fmt.Errorf("authentication cancelled: user denied access")
+				return fmt.Errorf("authentication canceled: user denied access")
 			}
 			if errors.Is(err, io.EOF) {
-				return fmt.Errorf("authentication cancelled by user")
+				return fmt.Errorf("authentication canceled by user")
 			}
 			return fmt.Errorf("authentication failed: %w", err)
 		}
@@ -282,6 +282,6 @@ func parseChunkSize(size string) (int64, error) {
 	if value <= 0 {
 		return 0, fmt.Errorf("chunk size must be positive, got: %d", value)
 	}
-	
+
 	return value * multiplier, nil
 }

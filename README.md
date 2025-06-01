@@ -140,7 +140,7 @@ sync:
     - "*.tmp"
     - "~$*"
     - ".DS_Store"
-  
+
 logging:
   level: info
   file: ~/.cloudpull/sync.log

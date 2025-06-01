@@ -119,8 +119,8 @@ Subscribe to sync events:
 
 ```go
 progressTracker.Subscribe(func(snapshot progress.Snapshot) {
-    fmt.Printf("Progress: %.2f%% (%.2f MB/s)\n", 
-        snapshot.Percentage, 
+    fmt.Printf("Progress: %.2f%% (%.2f MB/s)\n",
+        snapshot.Percentage,
         snapshot.BytesPerSecond/1024/1024)
 })
 ```

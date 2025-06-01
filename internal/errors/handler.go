@@ -19,19 +19,19 @@ import (
 type RecoveryStrategy int
 
 const (
-	// RecoveryStrategyNone indicates no recovery possible
+	// RecoveryStrategyNone indicates no recovery possible.
 	RecoveryStrategyNone RecoveryStrategy = iota
 
-	// RecoveryStrategyRetry indicates simple retry
+	// RecoveryStrategyRetry indicates simple retry.
 	RecoveryStrategyRetry
 
-	// RecoveryStrategyBackoff indicates retry with exponential backoff
+	// RecoveryStrategyBackoff indicates retry with exponential backoff.
 	RecoveryStrategyBackoff
 
-	// RecoveryStrategyRestart indicates restart from beginning
+	// RecoveryStrategyRestart indicates restart from beginning.
 	RecoveryStrategyRestart
 
-	// RecoveryStrategySkip indicates skip and continue
+	// RecoveryStrategySkip indicates skip and continue.
 	RecoveryStrategySkip
 )
 

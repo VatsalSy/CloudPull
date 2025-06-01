@@ -185,10 +185,10 @@ func TestProgressSnapshot(t *testing.T) {
 
 	// Set total files to 4 and total bytes to 100MB
 	tracker.SetTotals(4, 1024*1024*100)
-	
+
 	// Add a small delay to ensure elapsed time > 0
 	time.Sleep(50 * time.Millisecond)
-	
+
 	// AddFile already increments both files and bytes, so don't call AddBytes separately
 	tracker.AddFile("file1.txt", 1024*1024*10)
 	time.Sleep(50 * time.Millisecond) // Simulate time passing
@@ -218,15 +218,15 @@ func TestProgressSnapshot(t *testing.T) {
 		eta := snapshot.ETA()
 		// Debug information
 		remainingBytes := snapshot.TotalBytes - snapshot.ProcessedBytes
-		t.Logf("ProcessedBytes: %d, TotalBytes: %d, RemainingBytes: %d, ElapsedTime: %v, BytesPerSecond: %.2f, ETA: %v (%.3f seconds)", 
+		t.Logf("ProcessedBytes: %d, TotalBytes: %d, RemainingBytes: %d, ElapsedTime: %v, BytesPerSecond: %.2f, ETA: %v (%.3f seconds)",
 			snapshot.ProcessedBytes, snapshot.TotalBytes, remainingBytes, snapshot.ElapsedTime, snapshot.BytesPerSecond(), eta, eta.Seconds())
-		
+
 		// ETA should be >= 0
 		if eta < 0 {
 			t.Error("ETA should not be negative")
 		}
-		
-		// If there are remaining bytes and we have a positive transfer rate, 
+
+		// If there are remaining bytes and we have a positive transfer rate,
 		// ETA should be calculable (even if very small)
 		if remainingBytes > 0 && snapshot.BytesPerSecond() > 0 {
 			// ETA can be very small in tests due to high transfer rates

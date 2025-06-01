@@ -165,7 +165,7 @@ func ExampleAPICallWithQuotaHandling(ctx context.Context) error {
 		} else {
 			// Record error for adaptive backoff
 			adaptiveBackoff.RecordError(apiErr.Type)
-			
+
 			// Wait for next attempt
 			backoff = adaptiveBackoff.NextBackOff()
 			if backoff < 0 {
@@ -185,7 +185,6 @@ func ExampleAPICallWithQuotaHandling(ctx context.Context) error {
 		case <-time.After(backoff):
 			continue
 		}
-
 	}
 
 	return lastErr

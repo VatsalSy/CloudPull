@@ -286,7 +286,7 @@ func monitorResumeProgress(ctx context.Context, app *app.App) {
 	for {
 		select {
 		case <-ctx.Done():
-			// Context cancelled, exit cleanly
+			// Context canceled, exit cleanly
 			fmt.Println() // New line after progress
 			return
 		case <-ticker.C:

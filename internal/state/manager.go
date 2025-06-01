@@ -185,9 +185,9 @@ func (m *Manager) MarkFileFailed(ctx context.Context, fileID, sessionID string, 
 func (m *Manager) GetNextPendingFile(ctx context.Context, sessionID string) (*File, error) {
 	// First check for partially downloaded files
 	query := `
-    SELECT * FROM files 
-    WHERE session_id = $1 
-      AND status = $2 
+    SELECT * FROM files
+    WHERE session_id = $1
+      AND status = $2
       AND bytes_downloaded > 0
     ORDER BY bytes_downloaded DESC
     LIMIT 1`
@@ -202,8 +202,8 @@ func (m *Manager) GetNextPendingFile(ctx context.Context, sessionID string) (*Fi
 
 	// Then get next pending file (smallest first)
 	query = `
-    SELECT * FROM files 
-    WHERE session_id = $1 
+    SELECT * FROM files
+    WHERE session_id = $1
       AND status = $2
     ORDER BY size ASC
     LIMIT 1`
@@ -222,8 +222,8 @@ func (m *Manager) GetNextPendingFile(ctx context.Context, sessionID string) (*Fi
 // GetNextPendingFolder retrieves the next folder to scan.
 func (m *Manager) GetNextPendingFolder(ctx context.Context, sessionID string) (*Folder, error) {
 	query := `
-    SELECT * FROM folders 
-    WHERE session_id = $1 
+    SELECT * FROM folders
+    WHERE session_id = $1
       AND status = $2
     ORDER BY path
     LIMIT 1`
@@ -259,8 +259,8 @@ func (m *Manager) ResumeSession(ctx context.Context, sessionID string) error {
 
 		// Reset failed folders
 		query := `
-      UPDATE folders 
-      SET status = $1, error_message = NULL 
+      UPDATE folders
+      SET status = $1, error_message = NULL
       WHERE session_id = $2 AND status = $3`
 
 		_, err = tx.ExecContext(ctx, query, FolderStatusPending, sessionID, FolderStatusFailed)
@@ -407,7 +407,7 @@ func (m *Manager) UpdateSessionStatus(ctx context.Context, sessionID string, sta
 // GetAllSessions returns all sessions.
 func (m *Manager) GetAllSessions(ctx context.Context) ([]*Session, error) {
 	query := `
-    SELECT * FROM sessions 
+    SELECT * FROM sessions
     ORDER BY created_at DESC`
 
 	var sessions []*Session
@@ -422,7 +422,7 @@ func (m *Manager) GetAllSessions(ctx context.Context) ([]*Session, error) {
 // UpdateSessionTotals updates the session total counts.
 func (m *Manager) UpdateSessionTotals(ctx context.Context, sessionID string, totalFiles, totalBytes int64) error {
 	query := `
-    UPDATE sessions 
+    UPDATE sessions
     SET total_files = $2, total_bytes = $3, updated_at = $4
     WHERE id = $1`
 
@@ -457,10 +457,10 @@ func (m *Manager) UpdateFileStatus(ctx context.Context, file *File) error {
 // GetPendingFiles retrieves pending files for a session.
 func (m *Manager) GetPendingFiles(ctx context.Context, sessionID string, limit int) ([]*File, error) {
 	query := `
-    SELECT * FROM files 
-    WHERE session_id = $1 
+    SELECT * FROM files
+    WHERE session_id = $1
       AND status IN ($2, $3)
-    ORDER BY 
+    ORDER BY
       CASE WHEN status = $3 THEN 0 ELSE 1 END,
       size ASC
     LIMIT $4`

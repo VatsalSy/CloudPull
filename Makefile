@@ -166,13 +166,13 @@ pre-commit: ## Run pre-commit checks on all files
 	@if command -v pre-commit &> /dev/null; then \
 		pre-commit run --all-files; \
 	else \
-		echo "pre-commit not installed. Run: ./scripts/install-hooks.sh"; \
+		echo "pre-commit not installed. Run: ./scripts/setup-dev.sh"; \
 	fi
 
 .PHONY: pre-commit-install
 pre-commit-install: ## Install pre-commit hooks
 	@echo "Installing pre-commit hooks..."
-	@./scripts/install-hooks.sh
+	@./scripts/setup-dev.sh
 
 .PHONY: pre-commit-update
 pre-commit-update: ## Update pre-commit hooks
@@ -180,7 +180,7 @@ pre-commit-update: ## Update pre-commit hooks
 	@if command -v pre-commit &> /dev/null; then \
 		pre-commit autoupdate; \
 	else \
-		echo "pre-commit not installed. Run: ./scripts/install-hooks.sh"; \
+		echo "pre-commit not installed. Run: ./scripts/setup-dev.sh"; \
 	fi
 
 # Development helpers
@@ -281,6 +281,6 @@ info: ## Show build information
 # Shortcuts
 .PHONY: b t r c
 b: build ## Shortcut for build
-t: test ## Shortcut for test  
+t: test ## Shortcut for test
 r: run ## Shortcut for run
 c: clean ## Shortcut for clean

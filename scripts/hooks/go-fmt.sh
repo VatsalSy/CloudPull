@@ -4,15 +4,15 @@
 set -e
 
 # Get the list of changed Go files
-files="$@"
+files=("$@")
 
-if [ -z "$files" ]; then
+if [ ${#files[@]} -eq 0 ]; then
   echo "No Go files to check"
   exit 0
 fi
 
 # Check if files are formatted
-unformatted=$(gofmt -l $files)
+unformatted=$(gofmt -l "${files[@]}")
 
 if [ -n "$unformatted" ]; then
   echo "The following files are not formatted:"

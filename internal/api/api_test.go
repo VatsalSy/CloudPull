@@ -121,7 +121,7 @@ func TestAdaptiveRateLimiter(t *testing.T) {
 		if testing.Short() || os.Getenv("CI") == "true" {
 			t.Skip("Skipping long-running adaptive rate limiter test in CI")
 		}
-		
+
 		config := &RateLimiterConfig{
 			RateLimit: 10,
 			BurstSize: 20,
@@ -193,10 +193,10 @@ func TestBatchProcessor(t *testing.T) {
 		// Skip creating batch processor with nil service for now
 		// This test needs to be redesigned to not execute actual API calls
 		bp := &BatchProcessor{
-			logger:     logger,
-			queue:      make([]BatchRequest, 0),
-			results:    make(chan BatchResponse, maxBatchSize*2),
-			mu:         sync.Mutex{},
+			logger:  logger,
+			queue:   make([]BatchRequest, 0),
+			results: make(chan BatchResponse, maxBatchSize*2),
+			mu:      sync.Mutex{},
 		}
 
 		// Add requests directly to queue to test queue management
@@ -226,7 +226,7 @@ func TestBatchProcessor(t *testing.T) {
 		batch := bp.queue[:size]
 		bp.queue = bp.queue[size:]
 		bp.mu.Unlock()
-		
+
 		assert.Len(t, batch, maxBatchSize)
 
 		// Check remaining queue

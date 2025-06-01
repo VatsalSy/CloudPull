@@ -129,8 +129,8 @@ CREATE INDEX IF NOT EXISTS idx_errors_item_id ON error_log(item_id);
 -- Triggers for updated_at (using BEFORE UPDATE to avoid recursion)
 -- Note: SQLite doesn't support direct assignment to NEW values in triggers,
 -- so we need to ensure updated_at is set explicitly in UPDATE statements
-CREATE TRIGGER IF NOT EXISTS update_sessions_timestamp 
-    BEFORE UPDATE OF id, root_folder_id, root_folder_name, destination_path, status, 
+CREATE TRIGGER IF NOT EXISTS update_sessions_timestamp
+    BEFORE UPDATE OF id, root_folder_id, root_folder_name, destination_path, status,
                      total_files, completed_files, failed_files, skipped_files,
                      total_bytes, completed_bytes, start_time, end_time,
                      error, last_error
@@ -141,7 +141,7 @@ CREATE TRIGGER IF NOT EXISTS update_sessions_timestamp
         WHERE NEW.updated_at = OLD.updated_at;
     END;
 
-CREATE TRIGGER IF NOT EXISTS update_folders_timestamp 
+CREATE TRIGGER IF NOT EXISTS update_folders_timestamp
     BEFORE UPDATE OF drive_id, parent_id, name, path, mime_type, status,
                      total_files, completed_files, failed_files, skipped_files,
                      total_bytes, completed_bytes, session_id, retry_count,
@@ -153,8 +153,8 @@ CREATE TRIGGER IF NOT EXISTS update_folders_timestamp
         WHERE NEW.updated_at = OLD.updated_at;
     END;
 
-CREATE TRIGGER IF NOT EXISTS update_files_timestamp 
-    BEFORE UPDATE OF drive_id, folder_id, name, path, size, mime_type, 
+CREATE TRIGGER IF NOT EXISTS update_files_timestamp
+    BEFORE UPDATE OF drive_id, folder_id, name, path, size, mime_type,
                      md5_checksum, modified_time, status, local_path,
                      download_attempts, session_id, retry_count, last_error,
                      chunk_size, total_chunks, completed_chunks
@@ -165,7 +165,7 @@ CREATE TRIGGER IF NOT EXISTS update_files_timestamp
         WHERE NEW.updated_at = OLD.updated_at;
     END;
 
-CREATE TRIGGER IF NOT EXISTS update_config_timestamp 
+CREATE TRIGGER IF NOT EXISTS update_config_timestamp
     BEFORE UPDATE OF value
     ON config
     FOR EACH ROW
@@ -176,7 +176,7 @@ CREATE TRIGGER IF NOT EXISTS update_config_timestamp
 
 -- Views for easier querying
 CREATE VIEW IF NOT EXISTS session_summary AS
-SELECT 
+SELECT
     s.id,
     s.root_folder_name,
     s.destination_path,
@@ -191,14 +191,14 @@ SELECT
     ROUND(CAST(s.completed_bytes AS FLOAT) / NULLIF(s.total_bytes, 0) * 100, 2) as bytes_progress_percent,
     s.start_time,
     s.end_time,
-    CASE 
+    CASE
         WHEN s.end_time IS NOT NULL THEN (julianday(s.end_time) - julianday(s.start_time)) * 86400
         ELSE (julianday('now') - julianday(s.start_time)) * 86400
     END as duration_seconds
 FROM sessions s;
 
 CREATE VIEW IF NOT EXISTS pending_downloads AS
-SELECT 
+SELECT
     f.id,
     f.drive_id,
     f.name,
