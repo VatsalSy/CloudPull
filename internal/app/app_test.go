@@ -125,6 +125,10 @@ func TestAppShutdown(t *testing.T) {
 }
 
 func TestAppSignalHandling(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping signal handling test in short mode")
+	}
+
 	v := setupTestConfig(t)
 
 	// Create config loader that uses our local viper instance
