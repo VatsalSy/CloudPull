@@ -50,9 +50,9 @@ repos:
     hooks:
       - id: golangci-lint
         name: golangci-lint
-        entry: golangci-lint run --fix
+        entry: scripts/hooks/golangci-lint.sh
         types: [go]
-        language: system
+        language: script
         pass_filenames: false
         require_serial: true
       - id: go-fmt
