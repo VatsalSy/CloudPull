@@ -165,7 +165,6 @@ jobs:
         env:
           GOOS: ${{ runner.os == 'macOS' && 'darwin' || 'linux' }}
           GOARCH: ${{ matrix.arch }}
-          CGO_ENABLED: 0
         run: |
           go build -v -o cloudpull-${{ runner.os }}-${{ matrix.arch }} ./cmd/cloudpull
 
@@ -174,7 +173,6 @@ jobs:
         env:
           GOOS: windows
           GOARCH: ${{ matrix.arch }}
-          CGO_ENABLED: 0
         run: |
           go build -v -o cloudpull-${{ runner.os }}-${{ matrix.arch }}.exe ./cmd/cloudpull
 

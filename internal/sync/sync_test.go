@@ -55,18 +55,21 @@ func TestProgressTracker_OnEvent(t *testing.T) {
 
 	var receivedEvents []*ProgressEvent
 	var mu sync.Mutex
+	var wg sync.WaitGroup
 
+	wg.Add(1) // Expect 1 event from SetTotals
 	pt.OnEvent(func(event *ProgressEvent) {
 		mu.Lock()
 		receivedEvents = append(receivedEvents, event)
 		mu.Unlock()
+		wg.Done()
 	})
 
 	// Trigger an event
 	pt.SetTotals(10, 1000)
 
 	// Wait for async event handlers
-	time.Sleep(100 * time.Millisecond)
+	wg.Wait()
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -136,17 +139,21 @@ func TestProgressTracker_FolderEvents(t *testing.T) {
 
 	var receivedEvents []*ProgressEvent
 	var mu sync.Mutex
+	var wg sync.WaitGroup
 
+	// Expect 2 events: FolderStarted and FolderCompleted
+	wg.Add(2)
 	pt.OnEvent(func(event *ProgressEvent) {
 		mu.Lock()
 		receivedEvents = append(receivedEvents, event)
 		mu.Unlock()
+		wg.Done()
 	})
 
 	pt.FolderStarted("folder-1", "Documents", "/Documents")
 	pt.FolderCompleted("folder-1", "Documents", "/Documents", 10)
 
-	time.Sleep(100 * time.Millisecond)
+	wg.Wait()
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -201,26 +208,32 @@ func TestProgressTracker_FileCompletedNonExistent(t *testing.T) {
 	// Should not panic when completing non-existent file
 	pt.FileCompleted("non-existent")
 
-	// completedFiles should still increment due to atomic operation
-	assert.Equal(t, int64(1), atomic.LoadInt64(&pt.completedFiles))
+	// completedFiles should NOT increment for non-existent files (returns early)
+	assert.Equal(t, int64(0), atomic.LoadInt64(&pt.completedFiles))
 }
 
 func TestProgressTracker_MultipleHandlers(t *testing.T) {
 	pt := NewProgressTracker("session-1")
 
 	var count1, count2 int32
+	var wg sync.WaitGroup
+
+	// Expect each handler to be called once (2 handlers total)
+	wg.Add(2)
 
 	pt.OnEvent(func(event *ProgressEvent) {
 		atomic.AddInt32(&count1, 1)
+		wg.Done()
 	})
 
 	pt.OnEvent(func(event *ProgressEvent) {
 		atomic.AddInt32(&count2, 1)
+		wg.Done()
 	})
 
 	pt.SetTotals(10, 1000)
 
-	time.Sleep(100 * time.Millisecond)
+	wg.Wait()
 
 	assert.True(t, atomic.LoadInt32(&count1) > 0)
 	assert.True(t, atomic.LoadInt32(&count2) > 0)
@@ -514,13 +527,13 @@ func TestWalkerStats(t *testing.T) {
 		FoldersScanned: 10,
 		FilesFound:     100,
 		TotalSize:      1024 * 1024,
-		Errors:         []error{errors.New("test error")},
+		ErrorCount:     1,
 	}
 
 	assert.Equal(t, int64(10), stats.FoldersScanned)
 	assert.Equal(t, int64(100), stats.FilesFound)
 	assert.Equal(t, int64(1024*1024), stats.TotalSize)
-	assert.Len(t, stats.Errors, 1)
+	assert.Equal(t, 1, stats.ErrorCount)
 }
 
 // =============================================================================
@@ -815,7 +828,7 @@ func TestDownloadInfo_GoogleDoc(t *testing.T) {
 func TestDownloadManagerStats(t *testing.T) {
 	stats := &DownloadManagerStats{
 		ActiveDownloads: 3,
-		WorkerPoolStats: WorkerPoolStats{
+		WorkerPoolStats: &WorkerPoolStats{
 			WorkerCount:    5,
 			QueuedTasks:    10,
 			TasksProcessed: 100,
