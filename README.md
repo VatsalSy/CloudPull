@@ -379,8 +379,10 @@ make build
    export HTTP_PROXY=http://proxy.example.com:8080
    export HTTPS_PROXY=http://proxy.example.com:8080
    ```
-6. **Large file download failures** - For files over 1GB, ensure you have sufficient disk space and stable connection. CloudPull will automatically resume interrupted downloads. You can also reduce chunk size in the config.
-7. **Google Drive quota exceeded** - This occurs when you hit daily download limits (10TB/day). Wait 24 hours or spread downloads across multiple days. Check quota status at <https://drive.google.com/settings/storage>
+6. **Large file download failures** - For files over 1GB, ensure you have sufficient disk space and a stable
+   connection. CloudPull will automatically resume interrupted downloads. You can also reduce chunk size in config.
+7. **Google Drive quota exceeded** - This occurs when you hit daily download limits (10TB/day). Wait 24 hours or
+   spread downloads across multiple days.
 8. **SQLite database corruption** - If you see "database disk image is malformed" errors, delete the corrupted database and restart:
    ```bash
    rm ~/.cloudpull/cloudpull.db
