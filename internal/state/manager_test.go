@@ -472,7 +472,7 @@ func TestManager_GetSessionStats(t *testing.T) {
 	require.NotNil(t, stats.Errors, "stats.Errors is nil")
 	assert.Len(t, stats.Errors, 1, "Expected one error summary")
 	if len(stats.Errors) == 1 {
-		assert.Equal(t, "API", stats.Errors[0].ErrorType, "Error type in summary mismatch")
+		assert.Equal(t, "download_failed", stats.Errors[0].ErrorType, "Error type in summary mismatch")
 		assert.Equal(t, int64(1), stats.Errors[0].Count, "Error count in summary mismatch")
 	}
 }
