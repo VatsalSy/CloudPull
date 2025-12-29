@@ -77,6 +77,20 @@ type DownloadStats struct {
 	TotalDuration      time.Duration
 }
 
+// IncrementDownloads atomically increments the total downloads count by 1.
+func (ds *DownloadStats) IncrementDownloads() {
+	ds.mu.Lock()
+	ds.TotalDownloads++
+	ds.mu.Unlock()
+}
+
+// AddBytes atomically adds n bytes to the total bytes downloaded.
+func (ds *DownloadStats) AddBytes(n int64) {
+	ds.mu.Lock()
+	ds.BytesDownloaded += n
+	ds.mu.Unlock()
+}
+
 // DownloadManagerConfig contains configuration for the download manager.
 type DownloadManagerConfig struct {
 	TempDir         string

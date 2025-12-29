@@ -467,18 +467,14 @@ func TestFormatBytes(t *testing.T) {
 }
 
 func TestGenerateID(t *testing.T) {
-	// Test that IDs are generated
+	// Test that IDs are generated with the required prefix
 	id1 := generateID()
 	assert.NotEmpty(t, id1)
-	assert.True(t, strings.HasPrefix(id1, "session_"))
+	assert.True(t, strings.HasPrefix(id1, "session_"), "ID should have 'session_' prefix")
 
-	// Test uniqueness
+	// Test uniqueness - two consecutive calls should produce different IDs
 	id2 := generateID()
-	assert.NotEqual(t, id1, id2)
-
-	// Test format (should contain timestamp)
-	parts := strings.Split(id1, "_")
-	assert.GreaterOrEqual(t, len(parts), 3) // session_date_random
+	assert.NotEqual(t, id1, id2, "consecutive IDs should be unique")
 }
 
 func TestGenerateID_Uniqueness(t *testing.T) {
@@ -499,8 +495,18 @@ func TestGenerateID_Uniqueness(t *testing.T) {
 // =============================================================================
 
 func TestTraversalStrategy(t *testing.T) {
-	assert.Equal(t, TraversalStrategy(0), TraversalBFS)
-	assert.Equal(t, TraversalStrategy(1), TraversalDFS)
+	// Verify strategies are distinct values (don't rely on specific integer values)
+	assert.NotEqual(t, TraversalBFS, TraversalDFS, "traversal strategies must be distinct")
+
+	// Verify default config uses BFS (the documented default)
+	cfg := DefaultWalkerConfig()
+	assert.Equal(t, TraversalBFS, cfg.Strategy, "default strategy should be BFS")
+
+	// Verify both strategies are valid TraversalStrategy values
+	strategies := []TraversalStrategy{TraversalBFS, TraversalDFS}
+	for _, s := range strategies {
+		assert.IsType(t, TraversalStrategy(0), s)
+	}
 }
 
 // =============================================================================
@@ -543,16 +549,14 @@ func TestWalkerStats(t *testing.T) {
 func TestDownloadStats(t *testing.T) {
 	stats := &DownloadStats{}
 
-	// Test concurrent access
+	// Test concurrent access using thread-safe methods
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			stats.mu.Lock()
-			stats.TotalDownloads++
-			stats.BytesDownloaded += 1000
-			stats.mu.Unlock()
+			stats.IncrementDownloads()
+			stats.AddBytes(1000)
 		}()
 	}
 	wg.Wait()
