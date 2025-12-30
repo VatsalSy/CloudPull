@@ -25,7 +25,7 @@ const (
 	SessionStatusPaused    = "paused"
 	SessionStatusCompleted = "completed"
 	SessionStatusFailed    = "failed"
-	SessionStatusCancelled = "cancelled"
+	SessionStatusCancelled = "cancelled" //nolint:misspell // Matches existing DB schema value.
 )
 
 // Folder statuses.

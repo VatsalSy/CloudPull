@@ -386,7 +386,9 @@ func (fw *FileWriter) Write(p []byte) (n int, err error) {
 // Close closes the file writer.
 func (fw *FileWriter) Close() error {
 	if fw.file != nil {
-		return fw.file.Close()
+		if err := fw.file.Close(); err != nil {
+			return fmt.Errorf("close log file: %w", err)
+		}
 	}
 	return nil
 }
@@ -396,13 +398,13 @@ func (fw *FileWriter) openFile() error {
 	// Create directory if needed
 	dir := filepath.Dir(fw.filename)
 	if err := os.MkdirAll(dir, 0750); err != nil {
-		return err
+		return fmt.Errorf("create log directory %s: %w", dir, err)
 	}
 
 	// Open file
 	file, err := os.OpenFile(fw.filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		return err
+		return fmt.Errorf("open log file %s: %w", fw.filename, err)
 	}
 
 	fw.file = file
@@ -413,7 +415,7 @@ func (fw *FileWriter) openFile() error {
 func (fw *FileWriter) rotate() error {
 	// Close current file
 	if err := fw.file.Close(); err != nil {
-		return err
+		return fmt.Errorf("close log file before rotation: %w", err)
 	}
 
 	// Rotate files
@@ -429,7 +431,7 @@ func (fw *FileWriter) rotate() error {
 
 	// Rename current file
 	if err := os.Rename(fw.filename, fw.filename+".1"); err != nil {
-		return err
+		return fmt.Errorf("rename log file %s -> %s: %w", fw.filename, fw.filename+".1", err)
 	}
 
 	// Open new file

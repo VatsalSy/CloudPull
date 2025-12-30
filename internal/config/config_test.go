@@ -25,7 +25,7 @@ func TestLoadDefaultConfig(t *testing.T) {
 	expectedDefaultDir := filepath.Join(homeDir, "CloudPull")
 	assert.Equal(t, expectedDefaultDir, cfg.Sync.DefaultDirectory, "Default Sync.DefaultDirectory is incorrect")
 	assert.Equal(t, "info", cfg.Log.Level, "Default Log.Level is incorrect")
-	assert.Equal(t, 3, cfg.API.MaxRetries, "Default API.MaxRetries is incorrect") // From setViperDefaults
+	assert.Equal(t, 3, cfg.API.MaxRetries, "Default API.MaxRetries is incorrect")     // From setViperDefaults
 	assert.Equal(t, "1MB", cfg.Sync.ChunkSize, "Default Sync.ChunkSize is incorrect") // From setViperDefaults
 }
 
@@ -109,26 +109,26 @@ func TestGetChunkSizeBytesRefined(t *testing.T) {
 }
 
 func TestGetBandwidthLimitBytes(t *testing.T) {
-    tests := []struct {
-        name         string
-        syncBandwidthLimit int    // Value to set in cfg.Sync.BandwidthLimit (MB)
-        expected     int64
-    }{
-        {name: "10MBps", syncBandwidthLimit: 10, expected: 10 * 1024 * 1024},
-        {name: "2MBps", syncBandwidthLimit: 2, expected: 2 * 1024 * 1024},
-        {name: "0 (unlimited)", syncBandwidthLimit: 0, expected: 0},
-        {name: "-5 (unlimited)", syncBandwidthLimit: -5, expected: 0}, // Negative should also be unlimited
-    }
+	tests := []struct {
+		name               string
+		syncBandwidthLimit int // Value to set in cfg.Sync.BandwidthLimit (MB)
+		expected           int64
+	}{
+		{name: "10MBps", syncBandwidthLimit: 10, expected: 10 * 1024 * 1024},
+		{name: "2MBps", syncBandwidthLimit: 2, expected: 2 * 1024 * 1024},
+		{name: "0 (unlimited)", syncBandwidthLimit: 0, expected: 0},
+		{name: "-5 (unlimited)", syncBandwidthLimit: -5, expected: 0}, // Negative should also be unlimited
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            cfgForTest := &Config{
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfgForTest := &Config{
 				Sync: SyncConfig{BandwidthLimit: tt.syncBandwidthLimit},
 			}
-            actual := cfgForTest.GetBandwidthLimitBytes()
-            assert.Equal(t, tt.expected, actual)
-        })
-    }
+			actual := cfgForTest.GetBandwidthLimitBytes()
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
 }
 
 func TestLoadWithEnvOverrides(t *testing.T) {
@@ -159,7 +159,6 @@ api:
 	t.Setenv("CLOUDPULL_SYNC_MAX_CONCURRENT", "10")
 	t.Setenv("CLOUDPULL_API_MAX_RETRIES", "7") // Not in file, will override default
 	t.Setenv("CLOUDPULL_NEW_SETTING_FROM_ENV", "env_value_specific")
-
 
 	// 3. Configure a new local viper instance
 	v := viper.New()
@@ -205,7 +204,6 @@ api:
 	// For NEW_SETTING_FROM_ENV, AutomaticEnv should handle it if it's not a nested key,
 	// or we can bind it too if needed: require.NoError(t, v.BindEnv("new_setting_from_env", "CLOUDPULL_NEW_SETTING_FROM_ENV"))
 
-
 	// Debug: Check viper's understanding of the values BEFORE LoadFromViper
 	assert.Equal(t, "debug", v.GetString("log.level"), "[Viper Direct] Log.Level should be from env 'debug'")
 	assert.Equal(t, 10, v.GetInt("sync.max_concurrent"), "[Viper Direct] Sync.MaxConcurrent should be from env '10'")
@@ -222,7 +220,7 @@ api:
 	// Viper's precedence: Env > File > Defaults set by v.SetDefault()
 	// Then, LoadFromViper calls setDefaults(cfg) which can alter zero-valued fields in cfg.
 
-	assert.Equal(t, "debug", cfg.Log.Level, "Log.Level should be from env 'debug'") // Env "debug" > File "info" > Default "default_info". setDefaults sets to "info" if empty.
+	assert.Equal(t, "debug", cfg.Log.Level, "Log.Level should be from env 'debug'")           // Env "debug" > File "info" > Default "default_info". setDefaults sets to "info" if empty.
 	assert.Equal(t, 10, cfg.Sync.MaxConcurrent, "Sync.MaxConcurrent should be from env '10'") // Env 10 > File 3 > Default 1. setDefaults sets to 3 if 0.
 
 	// API.RequestTimeout: Env (not set) > File 30 > Default 15. Not in setDefaults.
@@ -245,7 +243,7 @@ func TestSaveConfig(t *testing.T) {
 	viper.Set("sync.max_concurrent", 12)
 	viper.Set("api.request_timeout", 75)
 	// Set a value that would typically come from setViperDefaults
-	viper.SetDefault("api.max_retries", 3) // Ensure this default is active in global viper
+	viper.SetDefault("api.max_retries", 3)                        // Ensure this default is active in global viper
 	viper.Set("api.max_retries", viper.GetInt("api.max_retries")) // Explicitly set it so it's "in use"
 
 	// 2. Tell viper where to save this configuration
@@ -319,7 +317,6 @@ func TestGenericGetters(t *testing.T) {
 	v.Set("mykey.float", 12.34)
 	v.Set("mykey.bool", true)
 
-
 	// Apply some defaults to the local viper instance to mimic setViperDefaults
 	// This is important because LoadFromViper doesn't call setViperDefaults itself.
 	// However, for GetString, GetInt etc., these are direct viper calls proxied by the Config struct,
@@ -345,9 +342,8 @@ func TestGenericGetters(t *testing.T) {
 	// No need to reload into cfgAfterBool unless v was somehow disassociated from cfg.
 	// cfg.viper should still point to v.
 
-	assert.True(t, cfg.viper.GetBool("mykey.booltrue"), "GetBool (true) failed")  // Use cfg.viper.GetBool
+	assert.True(t, cfg.viper.GetBool("mykey.booltrue"), "GetBool (true) failed")    // Use cfg.viper.GetBool
 	assert.False(t, cfg.viper.GetBool("mykey.boolfalse"), "GetBool (false) failed") // Use cfg.viper.GetBool
-
 
 	// Test GetInt64
 	v.Set("mykey.int64", int64(1234567890123))

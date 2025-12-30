@@ -17,6 +17,7 @@ package state
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"runtime"
 	"sync"
@@ -113,7 +114,13 @@ func (m *Manager) LogError(ctx context.Context, sessionID, itemID, itemType, err
 }
 
 // UpdateSessionProgress atomically updates session progress.
-func (m *Manager) UpdateSessionProgress(ctx context.Context, sessionID string, fileCompleted bool, bytesCompleted int64, failed bool) error {
+func (m *Manager) UpdateSessionProgress(
+	ctx context.Context,
+	sessionID string,
+	fileCompleted bool,
+	bytesCompleted int64,
+	failed bool,
+) error {
 	delta := SessionProgressDelta{
 		CompletedBytes: bytesCompleted,
 	}
@@ -198,7 +205,7 @@ func (m *Manager) GetNextPendingFile(ctx context.Context, sessionID string) (*Fi
 	err := m.db.GetContext(ctx, &file, query, sessionID, FileStatusDownloading)
 	if err == nil {
 		return &file, nil
-	} else if err != sql.ErrNoRows {
+	} else if !errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("failed to get partial download: %w", err)
 	}
 
@@ -212,7 +219,7 @@ func (m *Manager) GetNextPendingFile(ctx context.Context, sessionID string) (*Fi
 
 	err = m.db.GetContext(ctx, &file, query, sessionID, FileStatusPending)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // No more files
 		}
 		return nil, fmt.Errorf("failed to get pending file: %w", err)
@@ -233,7 +240,7 @@ func (m *Manager) GetNextPendingFolder(ctx context.Context, sessionID string) (*
 	var folder Folder
 	err := m.db.GetContext(ctx, &folder, query, sessionID, FolderStatusPending)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // No more folders
 		}
 		return nil, fmt.Errorf("failed to get pending folder: %w", err)
@@ -300,11 +307,11 @@ func (m *Manager) GetSessionStats(ctx context.Context, sessionID string) (*Sessi
 	stats.FolderCounts = folderCounts
 
 	// Get error summary
-	errors, err := m.queries.GetErrorSummary(ctx, sessionID)
+	errorSummaries, err := m.queries.GetErrorSummary(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
-	stats.Errors = errors
+	stats.Errors = errorSummaries
 
 	return stats, nil
 }
@@ -350,7 +357,7 @@ func (m *Manager) GetConfig(ctx context.Context, key string) (string, error) {
 
 	err := m.db.GetContext(ctx, &value, query, key)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return "", fmt.Errorf("config key not found: %s", key)
 		}
 		return "", fmt.Errorf("failed to get config: %w", err)

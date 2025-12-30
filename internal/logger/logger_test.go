@@ -196,7 +196,9 @@ func TestStructuredError(t *testing.T) {
 	assert.Equal(t, "/path/to/file", output["file"])
 	assert.Equal(t, float64(1024), output["size"])
 	assert.Equal(t, float64(3), output["retry"])
-	assert.Contains(t, output["error_type"].(string), "errors.errorString")
+	errorType, ok := output["error_type"].(string)
+	require.True(t, ok)
+	assert.Contains(t, errorType, "errors.errorString")
 }
 
 // Test log operation.
@@ -221,13 +223,13 @@ func TestLogOperation(t *testing.T) {
 
 		// Check start log
 		var startLog map[string]interface{}
-		json.Unmarshal([]byte(logs[0]), &startLog)
+		require.NoError(t, json.Unmarshal([]byte(logs[0]), &startLog))
 		assert.Equal(t, "Operation started", startLog["message"])
 		assert.Equal(t, "test_operation", startLog["operation"])
 
 		// Check completion log
 		var endLog map[string]interface{}
-		json.Unmarshal([]byte(logs[1]), &endLog)
+		require.NoError(t, json.Unmarshal([]byte(logs[1]), &endLog))
 		assert.Equal(t, "Operation completed", endLog["message"])
 		assert.Equal(t, "test_operation", endLog["operation"])
 		assert.NotNil(t, endLog["duration"])
@@ -247,7 +249,7 @@ func TestLogOperation(t *testing.T) {
 
 		// Check failure log
 		var failLog map[string]interface{}
-		json.Unmarshal([]byte(logs[1]), &failLog)
+		require.NoError(t, json.Unmarshal([]byte(logs[1]), &failLog))
 		assert.Equal(t, "error", failLog["level"])
 		assert.Equal(t, "Operation failed", failLog["message"])
 		assert.Equal(t, "operation failed", failLog["error"])
@@ -374,7 +376,7 @@ func TestFileWriter(t *testing.T) {
 	t.Run("BasicWrite", func(t *testing.T) {
 		fw, err := NewFileWriter(logFile, 1024*1024, 3)
 		require.NoError(t, err)
-		defer fw.Close()
+		t.Cleanup(func() { require.NoError(t, fw.Close()) })
 
 		data := []byte("test log entry\n")
 		n, err := fw.Write(data)
@@ -392,14 +394,16 @@ func TestFileWriter(t *testing.T) {
 		rotateFile := filepath.Join(tempDir, "rotate.log")
 		fw, err := NewFileWriter(rotateFile, 50, 2)
 		require.NoError(t, err)
-		defer fw.Close()
+		t.Cleanup(func() { require.NoError(t, fw.Close()) })
 
 		// Write data to trigger rotation
 		data1 := []byte("First line of log data that is long\n")
-		fw.Write(data1)
+		_, err = fw.Write(data1)
+		require.NoError(t, err)
 
 		data2 := []byte("Second line that triggers rotation\n")
-		fw.Write(data2)
+		_, err = fw.Write(data2)
+		require.NoError(t, err)
 
 		// Check that rotation occurred
 		_, err = os.Stat(rotateFile + ".1")

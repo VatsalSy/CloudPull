@@ -17,6 +17,7 @@ package state
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -112,7 +113,7 @@ func (s *FileStore) Get(ctx context.Context, id string) (*File, error) {
 
 	err := s.db.GetContext(ctx, &file, query, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("file not found: %s", id)
 		}
 		return nil, fmt.Errorf("failed to get file: %w", err)
@@ -128,7 +129,7 @@ func (s *FileStore) GetByDriveID(ctx context.Context, driveID, sessionID string)
 
 	err := s.db.GetContext(ctx, &file, query, driveID, sessionID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // Not found is not an error for this method
 		}
 		return nil, fmt.Errorf("failed to get file by drive ID: %w", err)

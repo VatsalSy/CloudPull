@@ -352,6 +352,15 @@ func DataDir() string {
 
 // GetDataDir returns the CloudPull data directory.
 func (c *Config) GetDataDir() string {
+	if c.viper != nil {
+		if dataDir := c.viper.GetString("data_dir"); dataDir != "" {
+			return dataDir
+		}
+	} else {
+		if dataDir := viper.GetString("data_dir"); dataDir != "" {
+			return dataDir
+		}
+	}
 	return DataDir()
 }
 

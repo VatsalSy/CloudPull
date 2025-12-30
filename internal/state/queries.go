@@ -401,5 +401,9 @@ func (q *QueryBuilder) CleanupOldSessions(ctx context.Context, olderThan time.Du
 		return 0, fmt.Errorf("failed to cleanup old sessions: %w", err)
 	}
 
-	return result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	return rows, nil
 }

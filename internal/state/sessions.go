@@ -17,6 +17,7 @@ package state
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -72,7 +73,7 @@ func (s *SessionStore) Get(ctx context.Context, id string) (*Session, error) {
 
 	err := s.db.GetContext(ctx, &session, query, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("session not found: %s", id)
 		}
 		return nil, fmt.Errorf("failed to get session: %w", err)
@@ -338,7 +339,7 @@ func (s *SessionStore) GetSummary(ctx context.Context, id string) (*SessionSumma
 
 	err := s.db.GetContext(ctx, &summary, query, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("session not found: %s", id)
 		}
 		return nil, fmt.Errorf("failed to get session summary: %w", err)

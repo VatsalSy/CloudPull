@@ -17,6 +17,7 @@ package state
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
@@ -103,7 +104,7 @@ func (s *FolderStore) Get(ctx context.Context, id string) (*Folder, error) {
 
 	err := s.db.GetContext(ctx, &folder, query, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("folder not found: %s", id)
 		}
 		return nil, fmt.Errorf("failed to get folder: %w", err)
@@ -119,7 +120,7 @@ func (s *FolderStore) GetByDriveID(ctx context.Context, driveID, sessionID strin
 
 	err := s.db.GetContext(ctx, &folder, query, driveID, sessionID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // Not found is not an error for this method
 		}
 		return nil, fmt.Errorf("failed to get folder by drive ID: %w", err)
