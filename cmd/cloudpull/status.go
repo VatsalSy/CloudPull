@@ -21,6 +21,15 @@ import (
 	"github.com/VatsalSy/CloudPull/pkg/progress"
 )
 
+// Status constants for session state.
+const (
+	statusCompleted = "completed"
+	statusFailed    = "failed"
+	statusCanceled  = "canceled"
+	statusActive    = "active"
+	statusPaused    = "paused"
+)
+
 var statusCmd = &cobra.Command{
 	Use:   "status [session-id]",
 	Short: "Show sync progress and statistics",
@@ -130,7 +139,7 @@ func showActiveSessions(sessions []ActiveSession) {
 				BarEnd:        "]",
 			}),
 		)
-		bar.Set64(session.DownloadedBytes)
+		_ = bar.Set64(session.DownloadedBytes)
 		fmt.Print("\n")
 
 		// Statistics
@@ -215,7 +224,9 @@ func watchSyncStatus(args []string) error {
 		// Clear screen (simple version)
 		fmt.Print("\033[H\033[2J")
 
-		showSyncStatus(args)
+		if err := showSyncStatus(args); err != nil {
+			fmt.Fprintf(os.Stderr, "Error refreshing status: %v\n", err)
+		}
 
 		time.Sleep(1 * time.Second)
 	}
@@ -321,7 +332,7 @@ func getActiveSessions() []ActiveSession {
 
 	var activeSessions []ActiveSession
 	for _, session := range sessions {
-		if session.Status == "active" || session.Status == "paused" {
+		if session.Status == statusActive || session.Status == statusPaused {
 			activeSessions = append(activeSessions, convertToActiveSession(session))
 		}
 	}
@@ -343,7 +354,7 @@ func getSyncHistory() []SyncSession {
 
 	var history []SyncSession
 	for _, session := range sessions {
-		if session.Status == "completed" || session.Status == "failed" || session.Status == "canceled" {
+		if session.Status == statusCompleted || session.Status == statusFailed || session.Status == statusCanceled {
 			history = append(history, convertToSyncSession(session))
 		}
 	}
@@ -396,20 +407,6 @@ var (
 	trackerMu         sync.RWMutex
 )
 
-// getProgressTracker returns the progress tracker for a session.
-func getProgressTracker(sessionID string) *progress.Tracker {
-	trackerMu.RLock()
-	defer trackerMu.RUnlock()
-	return progressTrackers[sessionID]
-}
-
-// getMetricsCollector returns the metrics collector for a session.
-func getMetricsCollector(sessionID string) *progress.MetricsCollector {
-	trackerMu.RLock()
-	defer trackerMu.RUnlock()
-	return metricsCollectors[sessionID]
-}
-
 // RegisterProgressTracker registers a progress tracker for a session.
 func RegisterProgressTracker(sessionID string, tracker *progress.Tracker,
 	metrics *progress.MetricsCollector) {
@@ -426,13 +423,6 @@ func UnregisterProgressTracker(sessionID string) {
 	defer trackerMu.Unlock()
 	delete(progressTrackers, sessionID)
 	delete(metricsCollectors, sessionID)
-}
-
-// getRecentFiles returns recently completed files for a session.
-func getRecentFiles(sessionID string, limit int) []CompletedFile {
-	// TODO: This should be passed from the app context
-	// For now, return empty since we don't have a global state manager
-	return []CompletedFile{}
 }
 
 // getDiskStats returns disk usage statistics.
@@ -464,14 +454,6 @@ type SyncSession struct {
 	Canceled   bool
 }
 
-// safeUint64ToInt safely converts uint64 to int, capping at MaxInt.
-func safeUint64ToInt(n uint64) int {
-	if n > math.MaxInt {
-		return math.MaxInt
-	}
-	return int(n)
-}
-
 func safeInt64ToInt(n int64) int {
 	if n > math.MaxInt {
 		return math.MaxInt
@@ -486,11 +468,11 @@ func safeInt64ToInt(n int64) int {
 func getOrCreateApp() (*app.App, error) {
 	application, err := app.New()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create application: %w", err)
 	}
 
 	if err := application.Initialize(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to initialize application: %w", err)
 	}
 
 	return application, nil

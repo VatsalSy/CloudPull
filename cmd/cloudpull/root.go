@@ -30,7 +30,10 @@ Features:
 
 // Execute runs the root command.
 func Execute() error {
-	return rootCmd.Execute()
+	if err := rootCmd.Execute(); err != nil {
+		return fmt.Errorf("command execution failed: %w", err)
+	}
+	return nil
 }
 
 func init() {
@@ -77,7 +80,9 @@ func initConfig() {
 
 		// Create config directory if it doesn't exist
 		if _, err := os.Stat(configDir); os.IsNotExist(err) {
-			os.MkdirAll(configDir, 0750)
+			if mkdirErr := os.MkdirAll(configDir, 0750); mkdirErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: could not create config directory: %v\n", mkdirErr)
+			}
 		}
 	}
 

@@ -62,10 +62,10 @@ type setupConfig struct {
 // Returns true if we should continue with setup, false if user declined.
 func checkExistingConfig(configPath string) (bool, error) {
 	_, err := os.Stat(configPath)
+	if os.IsNotExist(err) {
+		return true, nil // Config doesn't exist, continue with setup
+	}
 	if err != nil {
-		if os.IsNotExist(err) {
-			return true, nil // Config doesn't exist, continue with setup
-		}
 		return false, fmt.Errorf("failed to check config file: %w", err)
 	}
 
@@ -319,13 +319,14 @@ func parseChunkSize(size string) (int64, error) {
 	size = strings.ToUpper(strings.TrimSpace(size))
 	multiplier := int64(1)
 
-	if strings.HasSuffix(size, "KB") {
+	switch {
+	case strings.HasSuffix(size, "KB"):
 		multiplier = 1024
 		size = strings.TrimSuffix(size, "KB")
-	} else if strings.HasSuffix(size, "MB") {
+	case strings.HasSuffix(size, "MB"):
 		multiplier = 1024 * 1024
 		size = strings.TrimSuffix(size, "MB")
-	} else if strings.HasSuffix(size, "GB") {
+	case strings.HasSuffix(size, "GB"):
 		multiplier = 1024 * 1024 * 1024
 		size = strings.TrimSuffix(size, "GB")
 	}

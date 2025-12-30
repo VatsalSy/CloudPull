@@ -35,6 +35,9 @@ or manual cancellation.`,
 	RunE: runResume,
 }
 
+// Status constants for progress monitoring.
+const statusStopped = "stopped"
+
 var (
 	resumeLatest bool
 	forceResume  bool
@@ -72,42 +75,67 @@ func runResume(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	// Get session to resume
-	var session *state.Session
-	if len(args) > 0 {
-		// Get specific session
-		sessions, err := application.GetSessions(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get sessions: %w", err)
-		}
-		for _, s := range sessions {
-			if s.ID == args[0] {
-				session = s
-				break
-			}
-		}
-		if session == nil {
-			return fmt.Errorf("session not found: %s", args[0])
-		}
-	} else if resumeLatest {
-		session, err = application.GetLatestSession(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get latest session: %w", err)
-		}
-		if session == nil {
-			return fmt.Errorf("no interrupted sessions found")
-		}
-	} else {
-		// Show session list
-		session, err = selectSessionFromApp(ctx, application)
-		if err != nil {
-			return err
-		}
-		if session == nil {
-			return fmt.Errorf("no session selected")
-		}
+	session, err := getSessionToResume(ctx, application, args)
+	if err != nil {
+		return err
 	}
 
 	// Display session info
+	displaySessionInfo(session)
+
+	// Check session status and get confirmation
+	shouldProceed, err := checkSessionAndConfirm(session)
+	if err != nil {
+		return err
+	}
+	if !shouldProceed {
+		return nil
+	}
+
+	// Resume sync with progress monitoring
+	return executeResume(ctx, application, session)
+}
+
+// getSessionToResume retrieves the session based on args or user selection.
+func getSessionToResume(ctx context.Context, application *app.App, args []string) (*state.Session, error) {
+	switch {
+	case len(args) > 0:
+		return getSessionByID(ctx, application, args[0])
+	case resumeLatest:
+		return getLatestSession(ctx, application)
+	default:
+		return selectSessionFromApp(ctx, application)
+	}
+}
+
+// getSessionByID finds a session by its ID.
+func getSessionByID(ctx context.Context, application *app.App, sessionID string) (*state.Session, error) {
+	sessions, err := application.GetSessions(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sessions: %w", err)
+	}
+	for _, s := range sessions {
+		if s.ID == sessionID {
+			return s, nil
+		}
+	}
+	return nil, fmt.Errorf("session not found: %s", sessionID)
+}
+
+// getLatestSession retrieves the most recent interrupted session.
+func getLatestSession(ctx context.Context, application *app.App) (*state.Session, error) {
+	session, err := application.GetLatestSession(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest session: %w", err)
+	}
+	if session == nil {
+		return nil, fmt.Errorf("no interrupted sessions found")
+	}
+	return session, nil
+}
+
+// displaySessionInfo prints session details to stdout.
+func displaySessionInfo(session *state.Session) {
 	fmt.Println(color.YellowString("Session Details:"))
 	fmt.Printf("  ID: %s\n", session.ID)
 	fmt.Printf("  Started: %s\n", session.StartTime.Format("Jan 2, 2006 3:04 PM"))
@@ -123,13 +151,17 @@ func runResume(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Progress: %d files completed\n", session.CompletedFiles)
 	}
 	fmt.Println()
+}
 
-	// Check session status
+// checkSessionAndConfirm validates session status and prompts for confirmation.
+func checkSessionAndConfirm(session *state.Session) (bool, error) {
+	// Check if already completed
 	if session.Status == state.SessionStatusCompleted {
 		fmt.Println(color.YellowString("⚠️  Warning: Session is already completed"))
-		return nil
+		return false, nil
 	}
 
+	// Check if failed and needs force
 	if session.Status == state.SessionStatusFailed && !forceResume {
 		fmt.Println(color.RedString("⚠️  Warning: Session failed previously"))
 		var proceed bool
@@ -138,10 +170,10 @@ func runResume(cmd *cobra.Command, args []string) error {
 			Default: false,
 		}
 		if err := survey.AskOne(prompt, &proceed); err != nil {
-			return fmt.Errorf("failed to get user confirmation for failed session: %w", err)
+			return false, fmt.Errorf("failed to get user confirmation for failed session: %w", err)
 		}
 		if !proceed {
-			return nil
+			return false, nil
 		}
 	}
 
@@ -152,13 +184,13 @@ func runResume(cmd *cobra.Command, args []string) error {
 		Default: true,
 	}
 	if err := survey.AskOne(prompt, &confirm); err != nil {
-		return fmt.Errorf("failed to get resume confirmation: %w", err)
+		return false, fmt.Errorf("failed to get resume confirmation: %w", err)
 	}
-	if !confirm {
-		return nil
-	}
+	return confirm, nil
+}
 
-	// Resume sync with progress monitoring
+// executeResume performs the actual resume operation with progress monitoring.
+func executeResume(ctx context.Context, application *app.App, session *state.Session) error {
 	errChan := make(chan error, 1)
 
 	// Create a cancellable context for the monitor goroutine
@@ -209,7 +241,7 @@ func selectSessionFromApp(ctx context.Context, app *app.App) (*state.Session, er
 
 	options := make([]string, len(resumableSessions))
 	for i, session := range resumableSessions {
-		progress := "N/A"
+		var progress string
 		if session.TotalFiles > 0 {
 			progress = fmt.Sprintf("%d/%d (%.0f%%)",
 				session.CompletedFiles, session.TotalFiles,
@@ -311,7 +343,7 @@ func monitorResumeProgress(ctx context.Context, app *app.App) {
 			}
 
 			// Check if complete
-			if progress.Status == "stopped" {
+			if progress.Status == statusStopped {
 				fmt.Println() // New line after progress
 				return
 			}

@@ -20,6 +20,12 @@ import (
 	"github.com/VatsalSy/CloudPull/internal/app"
 )
 
+// Status constants for sync progress monitoring.
+const (
+	syncStatusStopped   = "stopped"
+	syncStatusCompleted = "completed"
+)
+
 var syncCmd = &cobra.Command{
 	Use:   "sync [folder-id|folder-url]",
 	Short: "Start a new sync from Google Drive",
@@ -72,73 +78,141 @@ func init() {
 
 func runSync(cmd *cobra.Command, args []string) error {
 	// Initialize app
-	application, err := app.New()
+	application, err := initializeSyncApp()
 	if err != nil {
-		return fmt.Errorf("failed to create application: %w", err)
-	}
-
-	if err := application.Initialize(); err != nil {
-		return fmt.Errorf("failed to initialize application: %w", err)
-	}
-
-	if err := application.InitializeAuth(); err != nil {
-		return fmt.Errorf("failed to initialize authentication: %w", err)
-	}
-
-	// Check if authenticated
-	if !application.IsAuthenticated() {
-		return fmt.Errorf("not authenticated. Run 'cloudpull auth' first")
-	}
-
-	if err := application.InitializeSyncEngine(); err != nil {
-		return fmt.Errorf("failed to initialize sync engine: %w", err)
+		return err
 	}
 
 	fmt.Println(color.CyanString("📂 CloudPull Sync"))
 	fmt.Println()
 
 	// Get folder to sync
-	var folderID string
+	folderID, err := getFolderID(args)
+	if err != nil {
+		return err
+	}
+
+	// Determine and validate output directory
+	outDir, err := determineOutputDirectory(folderID)
+	if err != nil {
+		return err
+	}
+
+	// Display sync configuration
+	displaySyncConfig(folderID, outDir)
+
+	// Get user confirmation if needed
+	if !dryRun && !noConfirm {
+		proceed, err := confirmSyncStart()
+		if err != nil {
+			return err
+		}
+		if !proceed {
+			return nil
+		}
+	}
+
+	// Create output directory
+	if err := os.MkdirAll(outDir, 0750); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	// Execute the sync operation
+	return executeSyncOperation(application, folderID, outDir)
+}
+
+// initializeSyncApp creates and initializes the application for sync.
+func initializeSyncApp() (*app.App, error) {
+	application, err := app.New()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create application: %w", err)
+	}
+
+	if err := application.Initialize(); err != nil {
+		return nil, fmt.Errorf("failed to initialize application: %w", err)
+	}
+
+	if err := application.InitializeAuth(); err != nil {
+		return nil, fmt.Errorf("failed to initialize authentication: %w", err)
+	}
+
+	if !application.IsAuthenticated() {
+		return nil, fmt.Errorf("not authenticated. Run 'cloudpull auth' first")
+	}
+
+	if err := application.InitializeSyncEngine(); err != nil {
+		return nil, fmt.Errorf("failed to initialize sync engine: %w", err)
+	}
+
+	return application, nil
+}
+
+// getFolderID extracts or prompts for the folder ID to sync.
+func getFolderID(args []string) (string, error) {
 	if len(args) > 0 {
-		folderID = extractFolderID(args[0])
-	} else {
-		// Interactive folder selection
-		folderID = selectDriveFolder()
+		folderID := extractFolderID(args[0])
 		if folderID == "" {
-			return fmt.Errorf("no folder selected")
+			return "", fmt.Errorf("invalid folder ID or URL")
 		}
+		return folderID, nil
 	}
 
-	// Determine output directory
-	if outputDir == "" {
-		outputDir = viper.GetString("sync.default_directory")
-		if outputDir == "" {
-			home, _ := os.UserHomeDir()
-			// Sanitize folderID to prevent path traversal
-			cleanedFolderID := filepath.Clean(folderID)
-			// Check for any path separators
-			if strings.ContainsAny(cleanedFolderID, "/\\") {
-				return fmt.Errorf("invalid folder ID: contains path separators")
-			}
-			// Remove any leading slashes or dots
-			cleanedFolderID = strings.TrimLeft(cleanedFolderID, "./")
-			// Ensure it doesn't contain parent directory references
-			if strings.Contains(cleanedFolderID, "..") {
-				return fmt.Errorf("invalid folder ID: contains directory traversal")
-			}
-			outputDir = filepath.Join(home, "CloudPull", cleanedFolderID)
-			// Validate the final path doesn't escape the base directory
-			baseDir := filepath.Join(home, "CloudPull")
-			if !strings.HasPrefix(filepath.Clean(outputDir), filepath.Clean(baseDir)) {
-				return fmt.Errorf("invalid output directory: path traversal detected")
-			}
-		}
+	// Interactive folder selection
+	folderID := selectDriveFolder()
+	if folderID == "" {
+		return "", fmt.Errorf("no folder selected")
+	}
+	return folderID, nil
+}
+
+// determineOutputDirectory determines and validates the output directory.
+func determineOutputDirectory(folderID string) (string, error) {
+	if outputDir != "" {
+		return outputDir, nil
 	}
 
-	// Confirm sync settings
+	configDir := viper.GetString("sync.default_directory")
+	if configDir != "" {
+		return configDir, nil
+	}
+
+	// Build safe default path
+	return buildSafeOutputPath(folderID)
+}
+
+// buildSafeOutputPath constructs a safe output path from the folder ID.
+func buildSafeOutputPath(folderID string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	// Sanitize folderID to prevent path traversal
+	cleanedFolderID := filepath.Clean(folderID)
+	if strings.ContainsAny(cleanedFolderID, "/\\") {
+		return "", fmt.Errorf("invalid folder ID: contains path separators")
+	}
+
+	cleanedFolderID = strings.TrimLeft(cleanedFolderID, "./")
+	if strings.Contains(cleanedFolderID, "..") {
+		return "", fmt.Errorf("invalid folder ID: contains directory traversal")
+	}
+
+	outDir := filepath.Join(home, "CloudPull", cleanedFolderID)
+	baseDir := filepath.Join(home, "CloudPull")
+
+	if !strings.HasPrefix(filepath.Clean(outDir), filepath.Clean(baseDir)) {
+		return "", fmt.Errorf("invalid output directory: path traversal detected")
+	}
+
+	return outDir, nil
+}
+
+// displaySyncConfig prints the sync configuration to stdout.
+func displaySyncConfig(folderID, outDir string) {
 	fmt.Println(color.YellowString("Sync Configuration:"))
 	fmt.Printf("  Source: Google Drive folder %s\n", folderID)
-	fmt.Printf("  Destination: %s\n", outputDir)
+	fmt.Printf("  Destination: %s\n", outDir)
 	if len(includePatterns) > 0 {
 		fmt.Printf("  Include: %s\n", strings.Join(includePatterns, ", "))
 	}
@@ -149,32 +223,27 @@ func runSync(cmd *cobra.Command, args []string) error {
 		fmt.Println(color.YellowString("  Mode: DRY RUN (no files will be downloaded)"))
 	}
 	fmt.Println()
+}
 
-	if !dryRun && !noConfirm {
-		var proceed bool
-		prompt := &survey.Confirm{
-			Message: "Start sync?",
-			Default: true,
-		}
-		err := survey.AskOne(prompt, &proceed)
-		if err != nil {
-			// Handle user cancellation or I/O errors
-			if err.Error() == "interrupt" {
-				return fmt.Errorf("sync canceled by user")
-			}
-			return fmt.Errorf("failed to get user confirmation: %w", err)
-		}
-		if !proceed {
-			return nil
-		}
+// confirmSyncStart prompts the user to confirm starting the sync.
+func confirmSyncStart() (bool, error) {
+	var proceed bool
+	prompt := &survey.Confirm{
+		Message: "Start sync?",
+		Default: true,
 	}
-
-	// Create output directory
-	if err := os.MkdirAll(outputDir, 0750); err != nil {
-		return fmt.Errorf("failed to create output directory: %w", err)
+	err := survey.AskOne(prompt, &proceed)
+	if err != nil {
+		if err.Error() == "interrupt" {
+			return false, fmt.Errorf("sync canceled by user")
+		}
+		return false, fmt.Errorf("failed to get user confirmation: %w", err)
 	}
+	return proceed, nil
+}
 
-	// Prepare sync options
+// executeSyncOperation runs the sync and handles completion/interruption.
+func executeSyncOperation(application *app.App, folderID, outDir string) error {
 	syncOptions := &app.SyncOptions{
 		IncludePatterns: includePatterns,
 		ExcludePatterns: excludePatterns,
@@ -182,29 +251,24 @@ func runSync(cmd *cobra.Command, args []string) error {
 		DryRun:          dryRun,
 	}
 
-	// Start sync with progress monitoring
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Set up signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sigChan)
 
-	// Start sync session
-	sessionID, err := application.StartSyncWithSession(ctx, folderID, outputDir, syncOptions)
+	sessionID, err := application.StartSyncWithSession(ctx, folderID, outDir, syncOptions)
 	if err != nil {
 		return fmt.Errorf("failed to start sync: %w", err)
 	}
 
-	// Get sync engine completion channel
 	syncEngine := application.GetSyncEngine()
 	if syncEngine == nil {
 		return fmt.Errorf("sync engine not initialized")
 	}
 	completionChan := syncEngine.WaitForCompletion()
 
-	// Monitor progress
 	progressDone := make(chan struct{})
 	if !noProgress && !dryRun {
 		go func() {
@@ -213,64 +277,79 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}()
 	}
 
-	// Wait for completion or interruption
-	completionReceived := false
-	for !completionReceived {
+	return waitForSyncCompletion(application, sessionID, cancel, sigChan, completionChan, progressDone)
+}
+
+// waitForSyncCompletion waits for the sync to complete or be interrupted.
+func waitForSyncCompletion(
+	application *app.App,
+	sessionID string,
+	cancel context.CancelFunc,
+	sigChan chan os.Signal,
+	completionChan <-chan struct{},
+	progressDone chan struct{},
+) error {
+	for {
 		select {
 		case <-completionChan:
-			completionReceived = true
+			fmt.Println(color.GreenString("\n✅ Sync completed successfully!"))
+			return nil
 		case <-progressDone:
-			// If progress monitoring detected completion, we're done
-			completionReceived = true
+			fmt.Println(color.GreenString("\n✅ Sync completed successfully!"))
+			return nil
 		case <-time.After(100 * time.Millisecond):
-			// Check status periodically as a fallback
 			if progress := application.GetProgress(); progress != nil {
-				if progress.Status == "stopped" || progress.Status == "completed" {
-					completionReceived = true
+				if progress.Status == syncStatusStopped || progress.Status == syncStatusCompleted {
+					fmt.Println(color.GreenString("\n✅ Sync completed successfully!"))
+					return nil
 				}
 			}
 		case sig := <-sigChan:
-			fmt.Printf("\n%s Received signal: %v\n", color.YellowString("⚠️"), sig)
-			fmt.Println("Cleaning up sync session...")
+			return handleSyncInterrupt(application, sessionID, cancel, sig, progressDone)
+		}
+	}
+}
 
-			// Cancel the context to stop the sync
-			cancel()
+// handleSyncInterrupt handles the sync interruption gracefully.
+func handleSyncInterrupt(
+	application *app.App,
+	sessionID string,
+	cancel context.CancelFunc,
+	sig os.Signal,
+	progressDone chan struct{},
+) error {
+	fmt.Printf("\n%s Received signal: %v\n", color.YellowString("⚠️"), sig)
+	fmt.Println("Cleaning up sync session...")
 
-			// Force exit after timeout to prevent hanging
-			go func() {
-				time.Sleep(10 * time.Second)
-				fmt.Println("Force exit due to shutdown timeout")
-				os.Exit(1)
-			}()
+	cancel()
 
-			// Clean up the session
-			if sessionID != "" {
-				if err := application.CleanupSession(sessionID); err != nil {
-					fmt.Printf("%s Failed to clean up session: %v\n", color.RedString("❌"), err)
-				} else {
-					fmt.Println(color.GreenString("✓ Session cleaned up"))
-				}
-			}
+	// Force exit after timeout
+	go func() {
+		time.Sleep(10 * time.Second)
+		fmt.Println("Force exit due to shutdown timeout")
+		os.Exit(1)
+	}()
 
-			// Wait for progress monitoring to finish with timeout
-			if !noProgress && !dryRun {
-				select {
-				case <-progressDone:
-					// Progress monitoring finished
-				case <-time.After(5 * time.Second):
-					// Timeout waiting for progress monitoring
-					fmt.Println("Progress monitoring timeout")
-				}
-			}
-
-			return fmt.Errorf("sync interrupted by user")
+	// Clean up the session
+	if sessionID != "" {
+		if err := application.CleanupSession(sessionID); err != nil {
+			fmt.Printf("%s Failed to clean up session: %v\n", color.RedString("❌"), err)
+		} else {
+			fmt.Println(color.GreenString("✓ Session cleaned up"))
 		}
 	}
 
-	// Sync completed successfully
-	fmt.Println(color.GreenString("\n✅ Sync completed successfully!"))
+	// Wait for progress monitoring to finish with timeout
+	if !noProgress && !dryRun {
+		select {
+		case <-progressDone:
+			// Progress monitoring finished
+		case <-time.After(5 * time.Second):
+			fmt.Println("Progress monitoring timeout")
+		}
+	}
 
-	return nil
+	return fmt.Errorf("sync interrupted by user")
 }
 
 func extractFolderID(input string) string {
@@ -342,7 +421,7 @@ func monitorSyncProgress(app *app.App, completionChan <-chan struct{}) {
 		case <-done:
 			// Sync completed
 			if bar != nil {
-				bar.Finish()
+				_ = bar.Finish()
 			}
 			return
 		case <-ticker.C:
@@ -381,7 +460,7 @@ func monitorSyncProgress(app *app.App, completionChan <-chan struct{}) {
 			}
 
 			// Check if complete via status
-			if progress.Status == "stopped" || progress.Status == "completed" {
+			if progress.Status == syncStatusStopped || progress.Status == syncStatusCompleted {
 				if bar != nil {
 					_ = bar.Finish()
 				}
