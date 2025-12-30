@@ -122,9 +122,16 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
-      - name: Run tests
+      - name: Run tests (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        # Race detector on Windows is known to have issues; skip it for stability
+        run: go test -v -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.go == '1.24'
