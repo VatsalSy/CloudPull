@@ -32,7 +32,7 @@ Steps to reproduce the behavior:
 
 ## Environment
 
-- **OS**: [e.g. macOS 14.0, Ubuntu 22.04, Windows 11]
+- **OS**: [e.g. macOS 14.0, Ubuntu 22.04, Windows 11 (WSL2)]
 - **CloudPull version**: [e.g. v1.0.0]
 - **Go version**: [e.g. 1.21]
 - **Installation method**: [e.g. from source, homebrew, binary]

@@ -34,6 +34,8 @@ Fast, resumable Google Drive folder synchronization tool with rsync-like functio
 
 ## Installation
 
+> CloudPull supports **macOS** and **Linux**. Windows is not currently supported; please use **WSL2** (Windows Subsystem for Linux) and run CloudPull inside your Linux distro.
+
 ### From Source
 
 ```bash
@@ -60,7 +62,7 @@ make install
 
 ### Pre-built Binaries
 
-Download the latest release for your platform from the [releases page](https://github.com/VatsalSy/CloudPull/releases).
+Download the latest release for macOS or Linux from the [releases page](https://github.com/VatsalSy/CloudPull/releases). Windows is not currently supported; please use WSL2.
 
 ## OAuth Setup
 

@@ -55,6 +55,7 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+.cache/
 
 # OAuth tokens and credentials
 credentials.json
