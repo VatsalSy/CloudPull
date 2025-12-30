@@ -158,7 +158,8 @@ func (m *Manager) MarkFileComplete(ctx context.Context, fileID, sessionID string
 
 // MarkFileFailed marks a file as failed and logs the error.
 func (m *Manager) MarkFileFailed(ctx context.Context, fileID, sessionID string, err error) error {
-	return m.db.WithTx(ctx, func(tx *sqlx.Tx) error {
+	// Execute file status update and session progress in a transaction
+	txErr := m.db.WithTx(ctx, func(tx *sqlx.Tx) error {
 		// Mark file as failed
 		fileStore := m.files.WithTx(tx)
 		fileErr := fileStore.MarkAsFailed(ctx, fileID, err.Error())
@@ -171,14 +172,15 @@ func (m *Manager) MarkFileFailed(ctx context.Context, fileID, sessionID string, 
 		delta := SessionProgressDelta{
 			FailedFiles: 1,
 		}
-		sessionErr := sessionStore.UpdateProgress(ctx, sessionID, delta)
-		if sessionErr != nil {
-			return sessionErr
-		}
-
-		// Log error
-		return m.LogError(ctx, sessionID, fileID, "file", "download_failed", err)
+		return sessionStore.UpdateProgress(ctx, sessionID, delta)
 	})
+
+	if txErr != nil {
+		return txErr
+	}
+
+	// Log error outside transaction to avoid SQLite write lock deadlock
+	return m.LogError(ctx, sessionID, fileID, "file", "download_failed", err)
 }
 
 // GetNextPendingFile retrieves the next file to download.
@@ -423,10 +425,10 @@ func (m *Manager) GetAllSessions(ctx context.Context) ([]*Session, error) {
 func (m *Manager) UpdateSessionTotals(ctx context.Context, sessionID string, totalFiles, totalBytes int64) error {
 	query := `
     UPDATE sessions
-    SET total_files = $2, total_bytes = $3, updated_at = $4
-    WHERE id = $1`
+    SET total_files = ?, total_bytes = ?, updated_at = ?
+    WHERE id = ?`
 
-	_, err := m.db.ExecContext(ctx, query, sessionID, totalFiles, totalBytes, time.Now())
+	_, err := m.db.ExecContext(ctx, query, totalFiles, totalBytes, time.Now(), sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to update session totals: %w", err)
 	}

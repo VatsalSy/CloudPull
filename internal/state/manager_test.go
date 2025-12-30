@@ -381,8 +381,8 @@ func TestManager_ResumeSession(t *testing.T) {
 	session, err := manager.CreateSession(ctx, "s_resume", "ResumeSession", "/resume")
 	require.NoError(t, err)
 
-	// Set session to a resumable status (e.g., failed)
-	err = manager.UpdateSessionStatus(ctx, session.ID, state.SessionStatusFailed)
+	// Set session to a resumable status (paused is the only resumable status)
+	err = manager.UpdateSessionStatus(ctx, session.ID, state.SessionStatusPaused)
 	require.NoError(t, err)
 
 	folder := state.Folder{DriveID: "folder_resume", SessionID: session.ID, Name: "ResumeF", Path: "/ResumeF", Status: state.FolderStatusFailed}
@@ -441,8 +441,8 @@ func TestManager_GetSessionStats(t *testing.T) {
 	fileFailed := state.File{DriveID: "f_stats_fail", FolderID: folder.ID, SessionID: session.ID, Name: "failed.txt", Path: "/StatsF/failed.txt", Size: 50, Status: state.FileStatusPending}
 	err = manager.CreateFiles(ctx, []*state.File{&fileFailed})
 	require.NoError(t, err)
-	// Update session totals for this second file
-	err = manager.UpdateSessionTotals(ctx, session.ID, 1, 50) // Adds 1 to total_files, 50 to total_bytes
+	// Update session totals to include this second file (UpdateSessionTotals sets, not adds)
+	err = manager.UpdateSessionTotals(ctx, session.ID, 2, 150) // Sets total_files=2, total_bytes=150
 	require.NoError(t, err)
 	testErr := errors.New("stat fail error")
 	err = manager.MarkFileFailed(ctx, fileFailed.ID, session.ID, testErr) // This updates progress counts and logs error

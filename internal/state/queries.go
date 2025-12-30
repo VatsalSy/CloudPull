@@ -153,12 +153,12 @@ func (q *QueryBuilder) GetFolderTree(ctx context.Context, sessionID string, pare
 
 // ErrorSummary represents error statistics.
 type ErrorSummary struct {
-	LastOccurred time.Time `db:"last_occurred" json:"last_occurred"`
-	ErrorType    string    `db:"error_type" json:"error_type"`
-	ErrorCode    string    `db:"error_code" json:"error_code,omitempty"`
-	ItemType     string    `db:"item_type" json:"item_type"`
-	Count        int64     `db:"count" json:"count"`
-	IsRetryable  bool      `db:"is_retryable" json:"is_retryable"`
+	LastOccurred string `db:"last_occurred" json:"last_occurred"`
+	ErrorType    string `db:"error_type" json:"error_type"`
+	ErrorCode    string `db:"error_code" json:"error_code,omitempty"`
+	ItemType     string `db:"item_type" json:"item_type"`
+	Count        int64  `db:"count" json:"count"`
+	IsRetryable  bool   `db:"is_retryable" json:"is_retryable"`
 }
 
 // GetErrorSummary retrieves error summary for a session.
@@ -166,7 +166,7 @@ func (q *QueryBuilder) GetErrorSummary(ctx context.Context, sessionID string) ([
 	query := `
     SELECT
       error_type,
-      error_code,
+      COALESCE(error_code, '') as error_code,
       item_type,
       COUNT(*) as count,
       MAX(created_at) as last_occurred,

@@ -77,11 +77,11 @@ func (s *FileStore) CreateBatch(ctx context.Context, files []*File) error {
       INSERT INTO files (
         drive_id, folder_id, session_id, name, path, size,
         md5_checksum, mime_type, is_google_doc, export_mime_type,
-        status, drive_modified_time
+        status, drive_modified_time, bytes_downloaded
       ) VALUES (
         :drive_id, :folder_id, :session_id, :name, :path, :size,
         :md5_checksum, :mime_type, :is_google_doc, :export_mime_type,
-        :status, :drive_modified_time
+        :status, :drive_modified_time, :bytes_downloaded
       ) RETURNING id, created_at, updated_at`
 
 		stmt, err := tx.PrepareNamedContext(ctx, query)
