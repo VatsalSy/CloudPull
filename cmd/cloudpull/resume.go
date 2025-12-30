@@ -108,18 +108,9 @@ func getSessionToResume(ctx context.Context, application *app.App, args []string
 	}
 }
 
-// getSessionByID finds a session by its ID.
+// getSessionByID finds a session by its ID using direct database lookup.
 func getSessionByID(ctx context.Context, application *app.App, sessionID string) (*state.Session, error) {
-	sessions, err := application.GetSessions(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get sessions: %w", err)
-	}
-	for _, s := range sessions {
-		if s.ID == sessionID {
-			return s, nil
-		}
-	}
-	return nil, fmt.Errorf("session not found: %s", sessionID)
+	return application.GetSessionByID(ctx, sessionID)
 }
 
 // getLatestSession retrieves the most recent interrupted session.

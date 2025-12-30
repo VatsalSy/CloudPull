@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/AlecAivazis/survey/v2/terminal"
 	"github.com/fatih/color"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
@@ -234,7 +236,7 @@ func confirmSyncStart() (bool, error) {
 	}
 	err := survey.AskOne(prompt, &proceed)
 	if err != nil {
-		if err.Error() == "interrupt" {
+		if errors.Is(err, terminal.InterruptErr) {
 			return false, fmt.Errorf("sync canceled by user")
 		}
 		return false, fmt.Errorf("failed to get user confirmation: %w", err)
@@ -289,18 +291,22 @@ func waitForSyncCompletion(
 	completionChan <-chan struct{},
 	progressDone chan struct{},
 ) error {
+	printSuccess := func() {
+		fmt.Println(color.GreenString("\n✅ Sync completed successfully!"))
+	}
+
 	for {
 		select {
 		case <-completionChan:
-			fmt.Println(color.GreenString("\n✅ Sync completed successfully!"))
+			printSuccess()
 			return nil
 		case <-progressDone:
-			fmt.Println(color.GreenString("\n✅ Sync completed successfully!"))
+			printSuccess()
 			return nil
 		case <-time.After(100 * time.Millisecond):
 			if progress := application.GetProgress(); progress != nil {
 				if progress.Status == syncStatusStopped || progress.Status == syncStatusCompleted {
-					fmt.Println(color.GreenString("\n✅ Sync completed successfully!"))
+					printSuccess()
 					return nil
 				}
 			}

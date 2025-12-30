@@ -271,7 +271,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Get config path
 	configPath := viper.ConfigFileUsed()
 	if configPath == "" {
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("could not determine user home directory: %w", err)
+		}
 		configPath = filepath.Join(home, ".cloudpull", "config.yaml")
 	}
 

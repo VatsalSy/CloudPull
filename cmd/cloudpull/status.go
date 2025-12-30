@@ -21,15 +21,6 @@ import (
 	"github.com/VatsalSy/CloudPull/pkg/progress"
 )
 
-// Status constants for session state.
-const (
-	statusCompleted = "completed"
-	statusFailed    = "failed"
-	statusCanceled  = "canceled"
-	statusActive    = "active"
-	statusPaused    = "paused"
-)
-
 var statusCmd = &cobra.Command{
 	Use:   "status [session-id]",
 	Short: "Show sync progress and statistics",
@@ -332,7 +323,7 @@ func getActiveSessions() []ActiveSession {
 
 	var activeSessions []ActiveSession
 	for _, session := range sessions {
-		if session.Status == statusActive || session.Status == statusPaused {
+		if session.Status == state.SessionStatusActive || session.Status == state.SessionStatusPaused {
 			activeSessions = append(activeSessions, convertToActiveSession(session))
 		}
 	}
@@ -354,7 +345,7 @@ func getSyncHistory() []SyncSession {
 
 	var history []SyncSession
 	for _, session := range sessions {
-		if session.Status == statusCompleted || session.Status == statusFailed || session.Status == statusCanceled {
+		if session.Status == state.SessionStatusCompleted || session.Status == state.SessionStatusFailed || session.Status == state.SessionStatusCancelled {
 			history = append(history, convertToSyncSession(session))
 		}
 	}

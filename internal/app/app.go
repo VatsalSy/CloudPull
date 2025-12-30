@@ -583,6 +583,14 @@ func (app *App) GetLatestSession(ctx context.Context) (*state.Session, error) {
 	return sessions[0], nil
 }
 
+// GetSessionByID returns a session by its ID using direct database lookup.
+func (app *App) GetSessionByID(ctx context.Context, sessionID string) (*state.Session, error) {
+	if app.stateManager == nil {
+		return nil, errors.Errorf("state manager not initialized")
+	}
+	return app.stateManager.Sessions().Get(ctx, sessionID)
+}
+
 // GetProgress returns current sync progress.
 func (app *App) GetProgress() *cloudsync.SyncProgress {
 	app.mu.RLock()
@@ -670,8 +678,16 @@ func (app *App) ensureReady() error {
 }
 
 func (app *App) handleSignals(cancel context.CancelFunc) {
+	app.handleSignalsWithReady(cancel, nil)
+}
+
+func (app *App) handleSignalsWithReady(cancel context.CancelFunc, ready chan<- struct{}) {
 	sigChan := make(chan os.Signal, 1)
 	app.setupSignalHandling(sigChan)
+
+	if ready != nil {
+		close(ready) // Signal that handlers are registered
+	}
 
 	select {
 	case sig := <-sigChan:

@@ -2,7 +2,7 @@
 
 Fast, resumable Google Drive folder synchronization tool with rsync-like functionality.
 
-[![Go Version](https://img.shields.io/badge/go-1.21%2B-blue)](https://golang.org/dl/)
+[![Go Version](https://img.shields.io/badge/go-1.24%2B-blue)](https://golang.org/dl/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ## Features

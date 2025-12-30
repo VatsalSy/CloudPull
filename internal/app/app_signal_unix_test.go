@@ -6,7 +6,6 @@ package app
 import (
 	"context"
 	"os"
-	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -39,20 +38,17 @@ func TestAppSignalHandling(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Use WaitGroup to ensure signal handler is set up
-	var wg sync.WaitGroup
-	wg.Add(1)
+	// Use a ready channel to ensure signal handler is registered
+	ready := make(chan struct{})
 
 	// Start the app's signal handling in a goroutine
 	go func() {
-		// Signal that the goroutine has started
-		wg.Done()
-		// This will block until a signal is received
-		app.handleSignals(cancel)
+		// This will close ready when signal.Notify is called
+		app.handleSignalsWithReady(cancel, ready)
 	}()
 
-	// Wait for signal handler goroutine to start
-	wg.Wait()
+	// Wait for signal handler to be registered
+	<-ready
 
 	// Send SIGINT to the current process
 	err = syscall.Kill(os.Getpid(), syscall.SIGINT)
