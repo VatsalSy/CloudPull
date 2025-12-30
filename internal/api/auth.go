@@ -321,8 +321,19 @@ func (am *AuthManager) revokeToken(ctx context.Context, httpClient *http.Client,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		am.logger.Warn("Failed to revoke token", "token_type", tokenLabel, "status", resp.StatusCode, "response", string(bodyBytes))
+		// Limit response body read to prevent unbounded memory allocation
+		const maxResponseSize = 4096
+		limitedReader := io.LimitReader(resp.Body, maxResponseSize)
+		bodyBytes, err := io.ReadAll(limitedReader)
+		if err != nil {
+			am.logger.Warn("Failed to revoke token", "token_type", tokenLabel, "status", resp.StatusCode, "error", "failed to read response body")
+			return
+		}
+		responseStr := string(bodyBytes)
+		if len(bodyBytes) == maxResponseSize {
+			responseStr += "... (truncated)"
+		}
+		am.logger.Warn("Failed to revoke token", "token_type", tokenLabel, "status", resp.StatusCode, "response", responseStr)
 	}
 }
 

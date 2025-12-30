@@ -345,7 +345,7 @@ func getSyncHistory() []SyncSession {
 
 	var history []SyncSession
 	for _, session := range sessions {
-		if session.Status == state.SessionStatusCompleted || session.Status == state.SessionStatusFailed || session.Status == state.SessionStatusCancelled {
+		if isTerminalStatus(session.Status) {
 			history = append(history, convertToSyncSession(session))
 		}
 	}
@@ -505,6 +505,14 @@ func convertToActiveSession(session *state.Session) ActiveSession {
 		PeakSpeed:       speed,
 		ETA:             eta,
 	}
+}
+
+// isTerminalStatus returns true if the session status represents a terminal state
+// (completed, failed, or cancelled).
+func isTerminalStatus(status string) bool {
+	return status == state.SessionStatusCompleted ||
+		status == state.SessionStatusFailed ||
+		status == state.SessionStatusCancelled
 }
 
 // convertToSyncSession converts a state.Session to SyncSession.
