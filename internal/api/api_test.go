@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -183,15 +182,10 @@ func TestAuthManager(t *testing.T) {
 
 func TestBatchProcessor(t *testing.T) {
 	t.Run("batch queue management", func(t *testing.T) {
-		logger := newMockLogger()
-
 		// Skip creating batch processor with nil service for now
 		// This test needs to be redesigned to not execute actual API calls
 		bp := &BatchProcessor{
-			logger:  logger,
-			queue:   make([]BatchRequest, 0),
-			results: make(chan BatchResponse, maxBatchSize*2),
-			mu:      sync.Mutex{},
+			queue: make([]BatchRequest, 0),
 		}
 
 		// Add requests directly to queue to test queue management

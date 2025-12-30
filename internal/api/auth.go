@@ -88,7 +88,7 @@ func NewAuthManager(credentialsPath, tokenPath string, logger *logger.Logger) (*
 
 // GetClient returns an authenticated HTTP client for Google Drive API.
 func (am *AuthManager) GetClient(ctx context.Context) (*http.Client, error) {
-	token, err := am.getToken(ctx)
+	token, err := am.getToken()
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func (am *AuthManager) GetDriveService(ctx context.Context) (*drive.Service, err
 }
 
 // getToken retrieves token from file or initiates OAuth flow.
-func (am *AuthManager) getToken(ctx context.Context) (*oauth2.Token, error) {
+func (am *AuthManager) getToken() (*oauth2.Token, error) {
 	// Try to load existing token
 	token, err := am.loadToken()
 	if err == nil {
@@ -145,7 +145,7 @@ func (am *AuthManager) getToken(ctx context.Context) (*oauth2.Token, error) {
 func (am *AuthManager) loadToken() (*oauth2.Token, error) {
 	tokenBytes, err := os.ReadFile(am.tokenPath)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to read token file")
 	}
 
 	var token oauth2.Token
@@ -281,49 +281,8 @@ func (am *AuthManager) RevokeToken(ctx context.Context) error {
 		Timeout: httpTimeout,
 	}
 
-	// Revoke access token
-	if token.AccessToken != "" {
-		revokeURL := fmt.Sprintf("https://oauth2.googleapis.com/revoke?token=%s", token.AccessToken)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, revokeURL, nil)
-		if err != nil {
-			am.logger.Warn("Failed to create access token revocation request", "error", err)
-		} else {
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			resp, err := httpClient.Do(req)
-			if err != nil {
-				am.logger.Warn("Failed to revoke access token", "error", err)
-			} else {
-				defer resp.Body.Close()
-				if resp.StatusCode != http.StatusOK {
-					// Read response body for error details
-					bodyBytes, _ := io.ReadAll(resp.Body)
-					am.logger.Warn("Failed to revoke access token", "status", resp.StatusCode, "response", string(bodyBytes))
-				}
-			}
-		}
-	}
-
-	// Revoke refresh token
-	if token.RefreshToken != "" {
-		revokeURL := fmt.Sprintf("https://oauth2.googleapis.com/revoke?token=%s", token.RefreshToken)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, revokeURL, nil)
-		if err != nil {
-			am.logger.Warn("Failed to create refresh token revocation request", "error", err)
-		} else {
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			resp, err := httpClient.Do(req)
-			if err != nil {
-				am.logger.Warn("Failed to revoke refresh token", "error", err)
-			} else {
-				defer resp.Body.Close()
-				if resp.StatusCode != http.StatusOK {
-					// Read response body for error details
-					bodyBytes, _ := io.ReadAll(resp.Body)
-					am.logger.Warn("Failed to revoke refresh token", "status", resp.StatusCode, "response", string(bodyBytes))
-				}
-			}
-		}
-	}
+	am.revokeToken(ctx, httpClient, token.AccessToken, "access")
+	am.revokeToken(ctx, httpClient, token.RefreshToken, "refresh")
 
 	// Overwrite token file with empty token to prevent race conditions
 	emptyToken := &oauth2.Token{
@@ -339,6 +298,32 @@ func (am *AuthManager) RevokeToken(ctx context.Context) error {
 
 	am.logger.Info("Token revoked successfully")
 	return nil
+}
+
+func (am *AuthManager) revokeToken(ctx context.Context, httpClient *http.Client, tokenValue, tokenLabel string) {
+	if tokenValue == "" {
+		return
+	}
+
+	revokeURL := fmt.Sprintf("https://oauth2.googleapis.com/revoke?token=%s", tokenValue)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, revokeURL, nil)
+	if err != nil {
+		am.logger.Warn("Failed to create token revocation request", "token_type", tokenLabel, "error", err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		am.logger.Warn("Failed to revoke token", "token_type", tokenLabel, "error", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		am.logger.Warn("Failed to revoke token", "token_type", tokenLabel, "status", resp.StatusCode, "response", string(bodyBytes))
+	}
 }
 
 // IsAuthenticated checks if valid authentication exists.
