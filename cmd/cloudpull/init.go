@@ -61,8 +61,12 @@ type setupConfig struct {
 // checkExistingConfig checks if a config already exists and prompts for overwrite.
 // Returns true if we should continue with setup, false if user declined.
 func checkExistingConfig(configPath string) (bool, error) {
-	if _, err := os.Stat(configPath); err != nil {
-		return true, nil // Config doesn't exist, continue with setup
+	_, err := os.Stat(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil // Config doesn't exist, continue with setup
+		}
+		return false, fmt.Errorf("failed to check config file: %w", err)
 	}
 
 	var overwrite bool
@@ -163,7 +167,7 @@ func promptSetupConfig() (*setupConfig, error) {
 	}
 
 	if err := survey.Ask(questions, cfg); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to collect configuration: %w", err)
 	}
 
 	if cfg.EnableBandwidth {
@@ -172,7 +176,7 @@ func promptSetupConfig() (*setupConfig, error) {
 			Default: "10",
 		}
 		if err := survey.AskOne(bandwidthPrompt, &cfg.BandwidthLimit); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to get bandwidth limit: %w", err)
 		}
 	}
 

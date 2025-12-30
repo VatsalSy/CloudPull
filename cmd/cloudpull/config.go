@@ -333,7 +333,7 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 
 	// Reload configuration
 	if err := viper.ReadInConfig(); err != nil {
-		fmt.Printf(color.YellowString("Warning: Could not reload config: %v\n"), err)
+		return fmt.Errorf("failed to reload configuration: %w", err)
 	}
 	fmt.Println(color.GreenString("✓ Configuration reloaded"))
 
