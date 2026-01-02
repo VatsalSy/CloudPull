@@ -543,8 +543,10 @@ func (e *Engine) processWalkResults(resultChan <-chan *WalkResult) {
 		"size", formatBytes(totalBytes),
 	)
 
-	// Signal that walking is complete
+	// Signal that walking is complete (protected by mutex for thread safety)
+	e.mu.Lock()
 	e.walkingComplete = true
+	e.mu.Unlock()
 	e.checkIfSyncComplete()
 }
 
@@ -553,15 +555,22 @@ func (e *Engine) waitUntilResumed() bool {
 		return false
 	}
 
-	for e.isPaused {
+	for {
+		// Read isPaused under lock for thread safety
+		e.mu.RLock()
+		paused := e.isPaused
+		e.mu.RUnlock()
+
+		if !paused {
+			return true
+		}
+
 		select {
 		case <-e.ctx.Done():
 			return false
 		case <-time.After(time.Second):
 		}
 	}
-
-	return true
 }
 
 func (e *Engine) addWalkResultFiles(
@@ -825,13 +834,11 @@ func (e *Engine) handleFatalError(err error) {
 	e.cancel()
 }
 
-func (e *Engine) isSyncComplete() bool {
-	e.mu.RLock()
-	walkingComplete := e.walkingComplete
-	downloader := e.downloader
-	e.mu.RUnlock()
-
-	if !walkingComplete {
+// isSyncCompleteLocked checks completion assuming the mutex is already held.
+// This avoids deadlock when called from getStatus() which is called from GetProgress()
+// while holding the RLock.
+func (e *Engine) isSyncCompleteLocked() bool {
+	if !e.walkingComplete {
 		return false
 	}
 
@@ -845,19 +852,23 @@ func (e *Engine) isSyncComplete() bool {
 		return false
 	}
 
-	if downloader == nil {
+	if e.downloader == nil {
 		return false
 	}
 
-	downloaderStats := downloader.GetStats()
-	if downloaderStats.ActiveDownloads != 0 || downloaderStats.WorkerPoolStats.QueuedTasks != 0 {
-		return false
-	}
+	downloaderStats := e.downloader.GetStats()
+	return downloaderStats.ActiveDownloads == 0 && downloaderStats.WorkerPoolStats.QueuedTasks == 0
+}
 
-	return true
+func (e *Engine) isSyncComplete() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.isSyncCompleteLocked()
 }
 
 // getStatus returns the current engine status.
+// Note: This function assumes the caller holds at least RLock on e.mu.
+// It uses isSyncCompleteLocked() to avoid recursive locking which would deadlock.
 func (e *Engine) getStatus() string {
 	if !e.isRunning {
 		return engineStatusStopped
@@ -866,7 +877,7 @@ func (e *Engine) getStatus() string {
 		return engineStatusPaused
 	}
 
-	if e.isSyncComplete() {
+	if e.isSyncCompleteLocked() {
 		return engineStatusCompleted
 	}
 
