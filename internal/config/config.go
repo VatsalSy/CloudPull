@@ -435,6 +435,14 @@ func (c *Config) GetFloat64(key string) float64 {
 	return viper.GetFloat64(key)
 }
 
+// GetBool returns a bool value from viper.
+func (c *Config) GetBool(key string) bool {
+	if c.viper != nil {
+		return c.viper.GetBool(key)
+	}
+	return viper.GetBool(key)
+}
+
 // GetDuration returns a duration value from viper.
 func (c *Config) GetDuration(key string) time.Duration {
 	// Get the value as int (seconds) and convert to duration

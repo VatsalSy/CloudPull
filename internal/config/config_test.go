@@ -14,10 +14,16 @@ import (
 
 func TestLoadDefaultConfig(t *testing.T) {
 	viper.Reset()
+	t.Setenv("CLOUDPULL_LOG_LEVEL", "")
+	t.Setenv("CLOUDPULL_SYNC_CHUNK_SIZE", "")
+	t.Setenv("CLOUDPULL_API_MAX_RETRIES", "")
+	t.Setenv("CLOUDPULL_SYNC_DEFAULT_DIRECTORY", "")
 	// Load an empty config file to ensure setViperDefaults are applied, then setDefaults.
 	// This simulates the application's typical load path when no user config file exists.
-	cfg, err := Load()
-	require.NoError(t, err, "Load() with no config file should not produce an error")
+	tempConfig := filepath.Join(t.TempDir(), "empty_config.yaml")
+	require.NoError(t, os.WriteFile(tempConfig, []byte(""), 0600))
+	cfg, err := Load(tempConfig)
+	require.NoError(t, err, "Load() with an empty config file should not produce an error")
 	require.NotNil(t, cfg, "Load() should return a non-nil Config object")
 
 	// Assert values based on setViperDefaults() followed by setDefaults()
@@ -94,7 +100,11 @@ func TestGetChunkSizeBytesRefined(t *testing.T) {
 		{name: "1GB", chunkStr: "1GB", expected: 1 * 1024 * 1024 * 1024},
 		{name: "512 bytes as string", chunkStr: "512", expected: 512},
 		{name: "empty string (uses method's internal default 1MB)", chunkStr: "", expected: 1 * 1024 * 1024},
+		{name: "whitespace only (uses method's internal default 1MB)", chunkStr: "   ", expected: 1 * 1024 * 1024},
 		{name: "lowercase with spaces", chunkStr: " 2 mb ", expected: 2 * 1024 * 1024},
+		{name: "leading zeros with unit", chunkStr: "0005MB", expected: 5 * 1024 * 1024},
+		{name: "leading zeros with spaces", chunkStr: " 0002 kb ", expected: 2 * 1024},
+		{name: "leading zeros without unit", chunkStr: "000512", expected: 512},
 		{name: "invalid unit", chunkStr: "10XX", expectErr: true},
 		{name: "zero value", chunkStr: "0MB", expectErr: true},
 		{name: "just number (bytes)", chunkStr: "2048", expected: 2048},
@@ -341,7 +351,7 @@ func TestGenericGetters(t *testing.T) {
 	assert.Equal(t, 123, cfg.GetInt("mykey.int"), "GetInt failed")
 	assert.Equal(t, 5*time.Second, cfg.GetDuration("mykey.durationsec"), "GetDuration failed") // time.Second will be resolved by import
 	assert.Equal(t, 12.34, cfg.GetFloat64("mykey.float"), "GetFloat64 failed")
-	assert.True(t, cfg.viper.GetBool("mykey.bool"), "GetBool (initial true) failed") // Use cfg.viper.GetBool
+	assert.True(t, cfg.GetBool("mykey.bool"), "GetBool (initial true) failed")
 
 	// For GetBool, viper's GetBool is quite flexible with string parsing ("true", "false", "1", "0")
 	// Here we set it as a proper boolean.
@@ -351,8 +361,8 @@ func TestGenericGetters(t *testing.T) {
 	// No need to reload into cfgAfterBool unless v was somehow disassociated from cfg.
 	// cfg.viper should still point to v.
 
-	assert.True(t, cfg.viper.GetBool("mykey.booltrue"), "GetBool (true) failed")    // Use cfg.viper.GetBool
-	assert.False(t, cfg.viper.GetBool("mykey.boolfalse"), "GetBool (false) failed") // Use cfg.viper.GetBool
+	assert.True(t, cfg.GetBool("mykey.booltrue"), "GetBool (true) failed")
+	assert.False(t, cfg.GetBool("mykey.boolfalse"), "GetBool (false) failed")
 
 	// Test GetInt64
 	v.Set("mykey.int64", int64(1234567890123))

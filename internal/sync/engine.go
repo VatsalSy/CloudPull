@@ -521,11 +521,17 @@ func (e *Engine) processWalkResults(resultChan <-chan *WalkResult) {
 			continue
 		}
 
-		totalFiles, totalBytes, fileBatch = e.addWalkResultFiles(result, totalFiles, totalBytes, fileBatch, batchSize)
+		var err error
+		totalFiles, totalBytes, fileBatch, err = e.addWalkResultFiles(result, totalFiles, totalBytes, fileBatch, batchSize)
+		if err != nil {
+			e.errorChan <- err
+		}
 		e.maybeUpdateTotals(totalFiles, totalBytes)
 	}
 
-	e.flushWalkFileBatch(fileBatch)
+	if err := e.flushWalkFileBatch(fileBatch); err != nil {
+		e.errorChan <- err
+	}
 
 	// Final update
 	e.progressTracker.SetTotals(totalFiles, totalBytes)
@@ -563,9 +569,9 @@ func (e *Engine) addWalkResultFiles(
 	totalFiles, totalBytes int64,
 	fileBatch []*state.File,
 	batchSize int,
-) (int64, int64, []*state.File) {
+) (int64, int64, []*state.File, error) {
 	if len(result.Files) == 0 {
-		return totalFiles, totalBytes, fileBatch
+		return totalFiles, totalBytes, fileBatch, nil
 	}
 
 	e.logger.Debug("Processing walk result",
@@ -575,6 +581,7 @@ func (e *Engine) addWalkResultFiles(
 	)
 
 	totalFiles += int64(len(result.Files))
+	var scheduleErr error
 	for _, file := range result.Files {
 		totalBytes += file.Size
 		fileBatch = append(fileBatch, file)
@@ -583,14 +590,20 @@ func (e *Engine) addWalkResultFiles(
 			continue
 		}
 
-		e.scheduleFileBatch(fileBatch, totalFiles)
+		if err := e.scheduleFileBatch(fileBatch, totalFiles); err != nil {
+			if scheduleErr == nil {
+				scheduleErr = err
+			}
+			continue
+		}
+
 		fileBatch = make([]*state.File, 0, batchSize)
 	}
 
-	return totalFiles, totalBytes, fileBatch
+	return totalFiles, totalBytes, fileBatch, scheduleErr
 }
 
-func (e *Engine) scheduleFileBatch(files []*state.File, totalScheduled int64) {
+func (e *Engine) scheduleFileBatch(files []*state.File, totalScheduled int64) error {
 	e.logger.Debug("Scheduling file batch",
 		"batch_size", len(files),
 		"total_scheduled", totalScheduled,
@@ -598,7 +611,10 @@ func (e *Engine) scheduleFileBatch(files []*state.File, totalScheduled int64) {
 
 	if err := e.downloader.ScheduleBatch(files); err != nil {
 		e.logger.Error(err, "Failed to schedule batch")
+		return errors.Wrap(err, "failed to schedule batch")
 	}
+
+	return nil
 }
 
 func (e *Engine) maybeUpdateTotals(totalFiles, totalBytes int64) {
@@ -614,14 +630,17 @@ func (e *Engine) maybeUpdateTotals(totalFiles, totalBytes int64) {
 	e.updateSessionTotals(totalFiles, totalBytes)
 }
 
-func (e *Engine) flushWalkFileBatch(fileBatch []*state.File) {
+func (e *Engine) flushWalkFileBatch(fileBatch []*state.File) error {
 	if len(fileBatch) == 0 {
-		return
+		return nil
 	}
 
 	if err := e.downloader.ScheduleBatch(fileBatch); err != nil {
 		e.logger.Error(err, "Failed to schedule remaining batch")
+		return errors.Wrap(err, "failed to schedule remaining batch")
 	}
+
+	return nil
 }
 
 // schedulePendingDownloads schedules pending downloads when resuming.
