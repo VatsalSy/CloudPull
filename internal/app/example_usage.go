@@ -31,6 +31,7 @@ func Example() {
 		log.Printf("Failed to create app: %v", err)
 		return
 	}
+	defer app.Stop()
 
 	// Initialize application
 	if err := app.Initialize(); err != nil {

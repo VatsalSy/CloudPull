@@ -98,7 +98,10 @@ func (app *App) Initialize() error {
 	var output io.Writer = os.Stdout
 	outputPath := cfg.GetString("log.output")
 	if outputPath != "" && outputPath != "stdout" {
-		file, fileErr := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		// Sanitize the log path to prevent path traversal (G304)
+		cleanPath := filepath.Clean(outputPath)
+		// #nosec G304 -- log output path is from trusted application config, not user input
+		file, fileErr := os.OpenFile(cleanPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 		if fileErr != nil {
 			return errors.Wrap(fileErr, "failed to open log file")
 		}

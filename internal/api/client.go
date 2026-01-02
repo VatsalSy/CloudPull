@@ -446,7 +446,7 @@ func (dc *DriveClient) retryWithBackoff(ctx context.Context, operation func() er
 		case <-time.After(delay):
 			// Continue to next attempt
 		case <-ctx.Done():
-			return fmt.Errorf("retry interrupted: %w", ctx.Err())
+			return apperrors.Wrap(ctx.Err(), "retry interrupted")
 		}
 	}
 

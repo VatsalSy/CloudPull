@@ -1,12 +1,12 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-
 	"time"
 
 	"github.com/spf13/viper"

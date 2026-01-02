@@ -34,6 +34,11 @@ const (
 	engineStatusPaused    = "paused"
 	engineStatusRunning   = "running"
 	engineStatusStopped   = "stopped"
+
+	// totalsUpdateInitialThreshold is the file count after which totals updates are throttled.
+	totalsUpdateInitialThreshold int64 = 100
+	// totalsUpdateInterval is the file count interval for throttled totals updates.
+	totalsUpdateInterval int64 = 1000
 )
 
 // Engine is the main sync orchestrator.
@@ -538,6 +543,10 @@ func (e *Engine) processWalkResults(resultChan <-chan *WalkResult) {
 }
 
 func (e *Engine) waitUntilResumed() bool {
+	if e.ctx.Err() != nil {
+		return false
+	}
+
 	for e.isPaused {
 		select {
 		case <-e.ctx.Done():
@@ -597,7 +606,7 @@ func (e *Engine) maybeUpdateTotals(totalFiles, totalBytes int64) {
 		return
 	}
 
-	if totalFiles > 100 && totalFiles%1000 != 0 {
+	if totalFiles > totalsUpdateInitialThreshold && totalFiles%totalsUpdateInterval != 0 {
 		return
 	}
 
@@ -797,6 +806,38 @@ func (e *Engine) handleFatalError(err error) {
 	e.cancel()
 }
 
+func (e *Engine) isSyncComplete() bool {
+	e.mu.RLock()
+	walkingComplete := e.walkingComplete
+	downloader := e.downloader
+	e.mu.RUnlock()
+
+	if !walkingComplete {
+		return false
+	}
+
+	stats := e.progressTracker.GetStats()
+	if stats.TotalFiles <= 0 {
+		return false
+	}
+
+	totalProcessed := stats.CompletedFiles + stats.FailedFiles + stats.SkippedFiles
+	if totalProcessed < stats.TotalFiles {
+		return false
+	}
+
+	if downloader == nil {
+		return false
+	}
+
+	downloaderStats := downloader.GetStats()
+	if downloaderStats.ActiveDownloads != 0 || downloaderStats.WorkerPoolStats.QueuedTasks != 0 {
+		return false
+	}
+
+	return true
+}
+
 // getStatus returns the current engine status.
 func (e *Engine) getStatus() string {
 	if !e.isRunning {
@@ -806,65 +847,20 @@ func (e *Engine) getStatus() string {
 		return engineStatusPaused
 	}
 
-	// Check if sync is complete
-	if !e.walkingComplete {
-		return engineStatusRunning
+	if e.isSyncComplete() {
+		return engineStatusCompleted
 	}
 
-	stats := e.progressTracker.GetStats()
-	if stats.TotalFiles <= 0 {
-		return engineStatusRunning
-	}
-
-	totalProcessed := stats.CompletedFiles + stats.FailedFiles + stats.SkippedFiles
-	if totalProcessed < stats.TotalFiles {
-		return engineStatusRunning
-	}
-
-	if e.downloader == nil {
-		return engineStatusRunning
-	}
-
-	downloaderStats := e.downloader.GetStats()
-	if downloaderStats.ActiveDownloads != 0 || downloaderStats.WorkerPoolStats.QueuedTasks != 0 {
-		return engineStatusRunning
-	}
-
-	return engineStatusCompleted
+	return engineStatusRunning
 }
 
 // checkIfSyncComplete checks if the sync is complete and cancels the context if so.
 func (e *Engine) checkIfSyncComplete() {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	// Check if walking is complete
-	if !e.walkingComplete {
+	if !e.isSyncComplete() {
 		return
 	}
 
-	// Check if all downloads are complete
 	stats := e.progressTracker.GetStats()
-	if stats.TotalFiles <= 0 {
-		return
-	}
-
-	totalProcessed := stats.CompletedFiles + stats.FailedFiles + stats.SkippedFiles
-
-	if totalProcessed < stats.TotalFiles {
-		return
-	}
-
-	// Check worker pool status
-	if e.downloader == nil {
-		return
-	}
-
-	downloaderStats := e.downloader.GetStats()
-	if downloaderStats.ActiveDownloads != 0 || downloaderStats.WorkerPoolStats.QueuedTasks != 0 {
-		return
-	}
-
 	e.logger.Info("All downloads complete, stopping sync engine",
 		"total_files", stats.TotalFiles,
 		"completed", stats.CompletedFiles,
