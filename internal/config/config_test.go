@@ -16,8 +16,8 @@ func TestLoadDefaultConfig(t *testing.T) {
 	viper.Reset()
 	// Load an empty config file to ensure setViperDefaults are applied, then setDefaults.
 	// This simulates the application's typical load path when no user config file exists.
-	cfg, err := Load(filepath.Join(t.TempDir(), "non_existent_config.yaml"))
-	require.NoError(t, err, "Load() with non-existent path should not produce an error")
+	cfg, err := Load()
+	require.NoError(t, err, "Load() with no config file should not produce an error")
 	require.NotNil(t, cfg, "Load() should return a non-nil Config object")
 
 	// Assert values based on setViperDefaults() followed by setDefaults()
@@ -312,7 +312,7 @@ func TestConfigPathAndDataDir(t *testing.T) {
 
 	// Test cfg.GetDataDir()
 	// Load a default config to get a Config instance
-	cfg, err := Load(filepath.Join(t.TempDir(), "another_non_existent_config.yaml")) // Load with a path to trigger initViper once
+	cfg, err := LoadFromViper(viper.New())
 	require.NoError(t, err)
 	assert.Equal(t, expectedDefaultDataDir, cfg.GetDataDir(), "cfg.GetDataDir() is incorrect")
 }

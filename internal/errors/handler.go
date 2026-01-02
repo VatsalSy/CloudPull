@@ -133,7 +133,7 @@ func (h *Handler) HandleError(ctx context.Context, err *Error) RecoveryStrategy 
 
 	// Determine recovery strategy based on error type
 	switch err.Type {
-	case ErrorTypeUnknown, ErrorTypeAPI:
+	case ErrorTypeUnknown, ErrorTypeAPI, ErrorTypeContext:
 		return RecoveryStrategyNone
 
 	case ErrorTypePermission, ErrorTypeConfiguration:
@@ -368,7 +368,7 @@ func WrapWithContext(ctx context.Context, err error, op, path string) *Error {
 
 	// Add context information
 	if deadline, ok := ctx.Deadline(); ok {
-		wrapped.WithContext("deadline", deadline)
+		wrapped = wrapped.WithContext("deadline", deadline)
 	}
 
 	return wrapped
