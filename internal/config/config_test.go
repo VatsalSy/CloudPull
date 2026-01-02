@@ -84,16 +84,19 @@ api:
 
 func TestGetChunkSizeBytesRefined(t *testing.T) {
 	tests := []struct {
-		name     string
-		chunkStr string // Value to set in cfg.Sync.ChunkSize
-		expected int64
+		name      string
+		chunkStr  string // Value to set in cfg.Sync.ChunkSize
+		expected  int64
+		expectErr bool
 	}{
 		{name: "10KB", chunkStr: "10KB", expected: 10 * 1024},
 		{name: "2MB", chunkStr: "2MB", expected: 2 * 1024 * 1024},
 		{name: "1GB", chunkStr: "1GB", expected: 1 * 1024 * 1024 * 1024},
 		{name: "512 bytes as string", chunkStr: "512", expected: 512},
 		{name: "empty string (uses method's internal default 1MB)", chunkStr: "", expected: 1 * 1024 * 1024},
-		{name: "invalid unit", chunkStr: "10XX", expected: 10}, // fmt.Sscanf("10XX", "%d...", &val) yields val=10
+		{name: "lowercase with spaces", chunkStr: " 2 mb ", expected: 2 * 1024 * 1024},
+		{name: "invalid unit", chunkStr: "10XX", expectErr: true},
+		{name: "zero value", chunkStr: "0MB", expectErr: true},
 		{name: "just number (bytes)", chunkStr: "2048", expected: 2048},
 	}
 
@@ -103,7 +106,11 @@ func TestGetChunkSizeBytesRefined(t *testing.T) {
 				Sync: SyncConfig{ChunkSize: tt.chunkStr},
 			}
 			actual, err := cfgForTest.GetChunkSizeBytes()
-			require.NoError(t, err) // Sscanf doesn't return error here, just 0 for value if parse fails
+			if tt.expectErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, actual)
 		})
 	}

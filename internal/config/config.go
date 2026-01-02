@@ -13,8 +13,9 @@ import (
 )
 
 var (
-	once   sync.Once
-	config *Config
+	once    sync.Once
+	initErr error
+	config  *Config
 )
 
 // Config represents the application configuration.
@@ -105,8 +106,11 @@ func Load(cfgFile ...string) (*Config, error) {
 		if len(cfgFile) > 0 {
 			configFile = cfgFile[0]
 		}
-		initViper(configFile)
+		initErr = initViper(configFile)
 	})
+	if initErr != nil {
+		return nil, initErr
+	}
 
 	config = &Config{}
 	if err := viper.Unmarshal(config); err != nil {
@@ -171,7 +175,7 @@ func Save() error {
 }
 
 // initViper sets up viper configuration.
-func initViper(cfgFile string) {
+func initViper(cfgFile string) error {
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
 	} else {
@@ -197,7 +201,14 @@ func initViper(cfgFile string) {
 	setViperDefaults()
 
 	// Read config file - ignore error if file doesn't exist
-	_ = viper.ReadInConfig()
+	if err := viper.ReadInConfig(); err != nil {
+		var notFound viper.ConfigFileNotFoundError
+		if errors.As(err, &notFound) {
+			return nil
+		}
+		return fmt.Errorf("read config: %w", err)
+	}
+	return nil
 }
 
 // setViperDefaults sets default values in viper.
@@ -300,29 +311,52 @@ func setDefaults(cfg *Config) {
 
 // GetChunkSizeBytes converts chunk size string to bytes.
 func (c *Config) GetChunkSizeBytes() (int64, error) {
-	size := c.Sync.ChunkSize
+	size := strings.TrimSpace(c.Sync.ChunkSize)
 	if size == "" {
 		size = "1MB"
 	}
 
+	normalized := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(size), " ", ""))
 	multiplier := int64(1)
 	value := int64(0)
+	scanned := 0
+	var err error
+	numericPart := ""
 
 	switch {
-	case strings.HasSuffix(size, "KB"):
+	case strings.HasSuffix(normalized, "KB"):
 		multiplier = 1024
-		_, _ = fmt.Sscanf(size, "%dKB", &value)
-	case strings.HasSuffix(size, "MB"):
+		numericPart = strings.TrimSuffix(normalized, "KB")
+		scanned, err = fmt.Sscanf(normalized, "%dKB", &value)
+	case strings.HasSuffix(normalized, "MB"):
 		multiplier = 1024 * 1024
-		_, _ = fmt.Sscanf(size, "%dMB", &value)
-	case strings.HasSuffix(size, "GB"):
+		numericPart = strings.TrimSuffix(normalized, "MB")
+		scanned, err = fmt.Sscanf(normalized, "%dMB", &value)
+	case strings.HasSuffix(normalized, "GB"):
 		multiplier = 1024 * 1024 * 1024
-		_, _ = fmt.Sscanf(size, "%dGB", &value)
+		numericPart = strings.TrimSuffix(normalized, "GB")
+		scanned, err = fmt.Sscanf(normalized, "%dGB", &value)
 	default:
-		_, _ = fmt.Sscanf(size, "%d", &value)
+		numericPart = normalized
+		scanned, err = fmt.Sscanf(normalized, "%d", &value)
 	}
 
+	if err != nil || scanned != 1 || value <= 0 || !isDigits(numericPart) {
+		return 0, fmt.Errorf("invalid chunk size %q", size)
+	}
 	return value * multiplier, nil
+}
+
+func isDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // GetBandwidthLimitBytes converts bandwidth limit to bytes/second.
