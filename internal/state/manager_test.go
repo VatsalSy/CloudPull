@@ -3,15 +3,16 @@ package state_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
-	"errors" // Added for TestManager_LogError
 
-	"github.com/VatsalSy/CloudPull/internal/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/VatsalSy/CloudPull/internal/state"
 )
 
 func setupTestDB(t *testing.T) (*state.Manager, func()) {
@@ -137,7 +138,7 @@ func TestManager_CreateFolder_GetFolder(t *testing.T) {
 	require.NotNil(t, retrievedRootFolder)
 	assert.Equal(t, rootFolderData.Name, retrievedRootFolder.Name)
 
-	childFolderData := state.Folder{DriveID: "driveChildFolder1", SessionID: session.ID, Name: "Child Test Folder", Path: "/Root Test Folder/Child Test Folder", Status: state.FolderStatusPending, ParentID:  sql.NullString{String: rootFolderData.ID, Valid: true}}
+	childFolderData := state.Folder{DriveID: "driveChildFolder1", SessionID: session.ID, Name: "Child Test Folder", Path: "/Root Test Folder/Child Test Folder", Status: state.FolderStatusPending, ParentID: sql.NullString{String: rootFolderData.ID, Valid: true}}
 	err = manager.CreateFolder(ctx, &childFolderData)
 	require.NoError(t, err, "CreateFolder for child failed")
 	require.NotEmpty(t, childFolderData.ID)
@@ -327,7 +328,7 @@ func TestManager_MarkFileFailed(t *testing.T) {
 	assert.Equal(t, initialProgress.FailedFiles+1, finalProgress.FailedFiles, "FailedFiles count did not increment")
 
 	var errorLog []state.ErrorLog
-	err = manager.DB().SelectContext(ctx, &errorLog, "SELECT * FROM error_log WHERE session_id = $1 AND item_id = $2", session.ID, fileToFail.ID)
+	err = manager.DB().SelectContext(ctx, &errorLog, "SELECT * FROM error_log WHERE session_id = ? AND item_id = ?", session.ID, fileToFail.ID)
 	require.NoError(t, err, "Failed to query error_log")
 	require.Len(t, errorLog, 1, "Expected one entry in error_log")
 	assert.Equal(t, fileToFail.ID, errorLog[0].ItemID)
@@ -353,9 +354,8 @@ func TestManager_LogError(t *testing.T) {
 	require.NoError(t, err, "manager.LogError itself failed")
 
 	var loggedErrors []state.ErrorLog
-	// Using $1, $2 for SQLite placeholders, as sqlx often uses ? internally but then rebinds.
-	// Standard Go database/sql uses $n for Postgres, ? for MySQL/SQLite. sqlx should handle this.
-	query := "SELECT * FROM error_log WHERE session_id = $1 AND item_id = $2 AND error_type = $3"
+	// Use `?` placeholders for SQLite.
+	query := "SELECT * FROM error_log WHERE session_id = ? AND item_id = ? AND error_type = ?"
 	err = manager.DB().SelectContext(ctx, &loggedErrors, query, session.ID, testFileID, testErrorType)
 	require.NoError(t, err, "Failed to query error_log table")
 	require.Len(t, loggedErrors, 1, "Expected exactly one error log entry")
@@ -381,8 +381,8 @@ func TestManager_ResumeSession(t *testing.T) {
 	session, err := manager.CreateSession(ctx, "s_resume", "ResumeSession", "/resume")
 	require.NoError(t, err)
 
-	// Set session to a resumable status (e.g., failed)
-	err = manager.UpdateSessionStatus(ctx, session.ID, state.SessionStatusFailed)
+	// Set session to a resumable status (paused is the only resumable status)
+	err = manager.UpdateSessionStatus(ctx, session.ID, state.SessionStatusPaused)
 	require.NoError(t, err)
 
 	folder := state.Folder{DriveID: "folder_resume", SessionID: session.ID, Name: "ResumeF", Path: "/ResumeF", Status: state.FolderStatusFailed}
@@ -407,7 +407,6 @@ func TestManager_ResumeSession(t *testing.T) {
 	// ResetFailedFiles (called by ResumeSession) should set status to Pending and reset attempts.
 	assert.Equal(t, state.FileStatusPending, resumedFile.Status, "File status not updated to Pending after resume")
 	assert.Equal(t, 0, resumedFile.DownloadAttempts, "File download attempts should be reset")
-
 
 	resumedFolder, err := manager.Folders().Get(ctx, folder.ID)
 	require.NoError(t, err)
@@ -437,17 +436,15 @@ func TestManager_GetSessionStats(t *testing.T) {
 	err = manager.MarkFileComplete(ctx, fileCompleted.ID, session.ID) // This updates progress counts
 	require.NoError(t, err)
 
-
 	fileFailed := state.File{DriveID: "f_stats_fail", FolderID: folder.ID, SessionID: session.ID, Name: "failed.txt", Path: "/StatsF/failed.txt", Size: 50, Status: state.FileStatusPending}
 	err = manager.CreateFiles(ctx, []*state.File{&fileFailed})
 	require.NoError(t, err)
-	// Update session totals for this second file
-	err = manager.UpdateSessionTotals(ctx, session.ID, 1, 50) // Adds 1 to total_files, 50 to total_bytes
+	// Update session totals to include this second file (UpdateSessionTotals sets, not adds)
+	err = manager.UpdateSessionTotals(ctx, session.ID, 2, 150) // Sets total_files=2, total_bytes=150
 	require.NoError(t, err)
 	testErr := errors.New("stat fail error")
 	err = manager.MarkFileFailed(ctx, fileFailed.ID, session.ID, testErr) // This updates progress counts and logs error
 	require.NoError(t, err)
-
 
 	stats, err := manager.GetSessionStats(ctx, session.ID)
 	require.NoError(t, err, "GetSessionStats failed")
@@ -460,7 +457,6 @@ func TestManager_GetSessionStats(t *testing.T) {
 	assert.Equal(t, int64(100), stats.Progress.CompletedBytes, "Progress.CompletedBytes mismatch")
 	assert.Equal(t, int64(2), stats.Progress.TotalFiles, "Progress.TotalFiles mismatch")
 	assert.Equal(t, int64(150), stats.Progress.TotalBytes, "Progress.TotalBytes mismatch")
-
 
 	require.NotNil(t, stats.Files, "stats.Files is nil")
 	assert.Equal(t, int64(1), stats.Files.CompletedCount, "Files.CompletedCount mismatch")

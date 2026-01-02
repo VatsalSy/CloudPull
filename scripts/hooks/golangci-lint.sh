@@ -1,18 +1,8 @@
-#!/bin/bash
-# Wrapper for golangci-lint to handle typecheck issues with Go 1.24
+#!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-# Run golangci-lint but ignore typecheck errors
-# This is a temporary workaround for Go 1.24 compatibility issues
-golangci-lint run --fix "$@" 2>&1 | {
-    while IFS= read -r line; do
-        # Skip typecheck errors
-        if [[ ! "$line" =~ "typecheck" ]] && [[ ! "$line" =~ "could not import" ]]; then
-            echo "$line"
-        fi
-    done
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-# Always exit 0 for now until Go 1.24 issues are resolved
-exit 0
+exec bash "${PROJECT_ROOT}/scripts/run-golangci-lint.sh" --fix "$@"

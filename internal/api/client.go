@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,7 +14,7 @@ import (
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/googleapi"
 
-	"github.com/VatsalSy/CloudPull/internal/errors"
+	apperrors "github.com/VatsalSy/CloudPull/internal/errors"
 	"github.com/VatsalSy/CloudPull/internal/logger"
 )
 
@@ -125,13 +126,14 @@ func (dc *DriveClient) ListFiles(ctx context.Context, folderID string, pageToken
 		fileList, err = call.Do()
 		if err != nil {
 			dc.logger.Error(err, "API call failed")
+			return apperrors.Wrap(err, "drive files list")
 		}
-		return err
+		return nil
 	})
 
 	if err != nil {
 		dc.logger.Error(err, "Failed to list files after retries")
-		return nil, "", errors.Wrap(err, "failed to list files")
+		return nil, "", apperrors.Wrap(err, "failed to list files")
 	}
 	dc.logger.Debug("API call successful", "fileCount", len(fileList.Files))
 
@@ -156,11 +158,14 @@ func (dc *DriveClient) GetFile(ctx context.Context, fileID string) (*FileInfo, e
 		file, err = dc.service.Files.Get(fileID).
 			Fields("id, name, mimeType, size, md5Checksum, modifiedTime, parents").
 			Do()
-		return err
+		if err != nil {
+			return apperrors.Wrap(err, "drive files get")
+		}
+		return nil
 	})
 
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get file metadata")
+		return nil, apperrors.Wrap(err, "failed to get file metadata")
 	}
 
 	return dc.convertFileInfo(file), nil
@@ -187,20 +192,20 @@ func (dc *DriveClient) DownloadFile(ctx context.Context, fileID string, destPath
 func (dc *DriveClient) downloadRegularFile(ctx context.Context, fileID string, destPath string, fileSize int64, progressFn func(downloaded, total int64)) error {
 	// Create destination directory
 	if err := os.MkdirAll(filepath.Dir(destPath), 0750); err != nil {
-		return errors.Wrap(err, "failed to create destination directory")
+		return apperrors.Wrap(err, "failed to create destination directory")
 	}
 
 	// Open/create destination file
 	file, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return errors.Wrap(err, "failed to create destination file")
+		return apperrors.Wrap(err, "failed to create destination file")
 	}
 	defer file.Close()
 
 	// Check if file exists and get current size for resume
 	stat, err := file.Stat()
 	if err != nil {
-		return errors.Wrap(err, "failed to stat destination file")
+		return apperrors.Wrap(err, "failed to stat destination file")
 	}
 
 	startOffset := stat.Size()
@@ -214,7 +219,7 @@ func (dc *DriveClient) downloadRegularFile(ctx context.Context, fileID string, d
 
 	// Seek to end for append
 	if _, err := file.Seek(startOffset, 0); err != nil {
-		return errors.Wrap(err, "failed to seek in file")
+		return apperrors.Wrap(err, "failed to seek in file")
 	}
 
 	// Download in chunks
@@ -242,12 +247,18 @@ func (dc *DriveClient) downloadRegularFile(ctx context.Context, fileID string, d
 			req.Header().Set("Range", fmt.Sprintf("bytes=%d-%d", startOffset, endOffset))
 
 			var err error
-			resp, err = req.Download()
-			return err
+			resp, err = req.Download() //nolint:bodyclose // Closed after successful copy.
+			if err != nil {
+				if resp != nil && resp.Body != nil {
+					_ = resp.Body.Close()
+				}
+				return apperrors.Wrap(err, "drive files get download")
+			}
+			return nil
 		})
 
 		if err != nil {
-			return errors.Wrap(err, "failed to download chunk")
+			return apperrors.Wrap(err, "failed to download chunk")
 		}
 
 		// Write chunk to file
@@ -255,7 +266,7 @@ func (dc *DriveClient) downloadRegularFile(ctx context.Context, fileID string, d
 		resp.Body.Close()
 
 		if err != nil {
-			return errors.Wrap(err, "failed to write chunk")
+			return apperrors.Wrap(err, "failed to write chunk")
 		}
 
 		startOffset += written
@@ -282,7 +293,7 @@ func (dc *DriveClient) ExportFile(ctx context.Context, fileID string, mimeType s
 
 		exportMimeType = googleMimeTypes[fileInfo.MimeType]
 		if exportMimeType == "" {
-			return errors.Errorf("unsupported Google Workspace file type: %s", fileInfo.MimeType)
+			return apperrors.Errorf("unsupported Google Workspace file type: %s", fileInfo.MimeType)
 		}
 	}
 
@@ -295,7 +306,7 @@ func (dc *DriveClient) ExportFile(ctx context.Context, fileID string, mimeType s
 
 	// Create destination directory
 	if err := os.MkdirAll(filepath.Dir(destPath), 0750); err != nil {
-		return errors.Wrap(err, "failed to create destination directory")
+		return apperrors.Wrap(err, "failed to create destination directory")
 	}
 
 	// Wait for rate limit
@@ -307,46 +318,24 @@ func (dc *DriveClient) ExportFile(ctx context.Context, fileID string, mimeType s
 	var resp *http.Response
 	err := dc.retryWithBackoff(ctx, func() error {
 		var err error
-		resp, err = dc.service.Files.Export(fileID, exportMimeType).Download()
-		return err
+		resp, err = dc.service.Files.Export(fileID, exportMimeType).Download() //nolint:bodyclose // Closed after successful copy.
+		if err != nil {
+			if resp != nil && resp.Body != nil {
+				_ = resp.Body.Close()
+			}
+			return apperrors.Wrap(err, "drive files export download")
+		}
+		return nil
 	})
 
 	if err != nil {
-		return errors.Wrap(err, "failed to export file")
+		return apperrors.Wrap(err, "failed to export file")
 	}
 	defer resp.Body.Close()
 
-	// Create destination file
-	file, err := os.Create(destPath)
+	written, err := writeResponseToFile(destPath, resp.Body, progressFn)
 	if err != nil {
-		return errors.Wrap(err, "failed to create destination file")
-	}
-	defer file.Close()
-
-	// Copy content with progress tracking
-	var written int64
-	buf := make([]byte, 32*1024) // 32KB buffer
-
-	for {
-		n, err := resp.Body.Read(buf)
-		if n > 0 {
-			if _, writeErr := file.Write(buf[:n]); writeErr != nil {
-				return errors.Wrap(writeErr, "failed to write to file")
-			}
-			written += int64(n)
-
-			if progressFn != nil {
-				// For exports, we don't know total size in advance
-				progressFn(written, -1)
-			}
-		}
-
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return errors.Wrap(err, "failed to read export data")
-		}
+		return err
 	}
 
 	dc.logger.Info("File exported successfully",
@@ -357,32 +346,65 @@ func (dc *DriveClient) ExportFile(ctx context.Context, fileID string, mimeType s
 	return nil
 }
 
+func writeResponseToFile(destPath string, reader io.Reader, progressFn func(downloaded, total int64)) (int64, error) {
+	file, err := os.Create(destPath)
+	if err != nil {
+		return 0, apperrors.Wrap(err, "failed to create destination file")
+	}
+	defer file.Close()
+
+	var written int64
+	buf := make([]byte, 32*1024) // 32KB buffer
+
+	for {
+		n, err := reader.Read(buf)
+		if n > 0 {
+			if _, writeErr := file.Write(buf[:n]); writeErr != nil {
+				return written, apperrors.Wrap(writeErr, "failed to write to file")
+			}
+			written += int64(n)
+
+			if progressFn != nil {
+				// For exports, we don't know total size in advance
+				progressFn(written, -1)
+			}
+		}
+
+		if errors.Is(err, io.EOF) {
+			return written, nil
+		}
+		if err != nil {
+			return written, apperrors.Wrap(err, "failed to read export data")
+		}
+	}
+}
+
 // GetRootFolderID returns the ID of the root folder.
 func (dc *DriveClient) GetRootFolderID() string {
 	return "root"
 }
 
 // convertFileInfo converts Drive API file to FileInfo.
-func (dc *DriveClient) convertFileInfo(f *drive.File) *FileInfo {
+func (dc *DriveClient) convertFileInfo(driveFile *drive.File) *FileInfo {
 	info := &FileInfo{
-		ID:          f.Id,
-		Name:        f.Name,
-		MimeType:    f.MimeType,
-		Size:        f.Size,
-		MD5Checksum: f.Md5Checksum,
-		Parents:     f.Parents,
-		IsFolder:    f.MimeType == "application/vnd.google-apps.folder",
+		ID:          driveFile.Id,
+		Name:        driveFile.Name,
+		MimeType:    driveFile.MimeType,
+		Size:        driveFile.Size,
+		MD5Checksum: driveFile.Md5Checksum,
+		Parents:     driveFile.Parents,
+		IsFolder:    driveFile.MimeType == "application/vnd.google-apps.folder",
 	}
 
 	// Parse modified time
-	if f.ModifiedTime != "" {
-		if t, err := time.Parse(time.RFC3339, f.ModifiedTime); err == nil {
+	if driveFile.ModifiedTime != "" {
+		if t, err := time.Parse(time.RFC3339, driveFile.ModifiedTime); err == nil {
 			info.ModifiedTime = t
 		}
 	}
 
 	// Check if it's a Google Workspace file that needs export
-	if exportFormat, ok := googleMimeTypes[f.MimeType]; ok {
+	if exportFormat, ok := googleMimeTypes[driveFile.MimeType]; ok {
 		info.CanExport = true
 		info.ExportFormat = exportFormat
 	}
@@ -424,11 +446,11 @@ func (dc *DriveClient) retryWithBackoff(ctx context.Context, operation func() er
 		case <-time.After(delay):
 			// Continue to next attempt
 		case <-ctx.Done():
-			return ctx.Err()
+			return apperrors.Wrap(ctx.Err(), "retry interrupted")
 		}
 	}
 
-	return errors.Wrap(lastErr, "max retries exceeded")
+	return apperrors.Wrap(lastErr, "max retries exceeded")
 }
 
 // isRetryableError checks if an error is retryable.
@@ -438,7 +460,8 @@ func (dc *DriveClient) isRetryableError(err error) bool {
 	}
 
 	// Check for Google API errors
-	if apiErr, ok := err.(*googleapi.Error); ok {
+	var apiErr *googleapi.Error
+	if errors.As(err, &apiErr) {
 		switch apiErr.Code {
 		case 429, 500, 502, 503, 504: // Rate limit and server errors
 			return true
@@ -478,12 +501,18 @@ func (dc *DriveClient) GetFileContent(ctx context.Context, fileID string, startO
 	var resp *http.Response
 	err := dc.retryWithBackoff(ctx, func() error {
 		var err error
-		resp, err = req.Download()
-		return err
+		resp, err = req.Download() //nolint:bodyclose // Response body is owned by caller.
+		if err != nil {
+			if resp != nil && resp.Body != nil {
+				_ = resp.Body.Close()
+			}
+			return apperrors.Wrap(err, "drive files get download")
+		}
+		return nil
 	})
 
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to download file content")
+		return nil, apperrors.Wrap(err, "failed to download file content")
 	}
 
 	return resp, nil

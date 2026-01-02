@@ -181,7 +181,7 @@ func (mc *MetricsCollector) GetCurrentSpeed() float64 {
 
 		// Apply exponential weight (more recent = higher weight)
 		weight := float64(i) / float64(len(samples)-1)
-		weight = weight * weight // Square for exponential weighting
+		weight *= weight // Square for exponential weighting
 
 		weightedSpeed += speed * weight
 		totalWeight += weight
@@ -237,12 +237,13 @@ func (mc *MetricsCollector) GetStats() Stats {
 
 	// Calculate file statistics
 	for _, metric := range mc.fileMetrics {
-		if metric.Error != nil {
+		switch {
+		case metric.Error != nil:
 			stats.FailedFiles++
-		} else if !metric.EndTime.IsZero() {
+		case !metric.EndTime.IsZero():
 			stats.CompletedFiles++
 			stats.CompletedBytes += metric.BytesTransferred
-		} else {
+		default:
 			stats.ActiveFiles++
 		}
 

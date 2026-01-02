@@ -211,7 +211,7 @@ func (wp *WorkerPool) Stop() error {
 func (wp *WorkerPool) SubmitTask(file *state.File, priority int) error {
 	select {
 	case <-wp.ctx.Done():
-		return wp.ctx.Err()
+		return fmt.Errorf("worker pool stopped: %w", wp.ctx.Err())
 	default:
 	}
 
@@ -328,64 +328,74 @@ func (wp *WorkerPool) processResults() {
 			atomic.AddInt64(&wp.tasksProcessed, 1)
 
 			if result.Success {
-				atomic.AddInt64(&wp.tasksSucceeded, 1)
-				atomic.AddInt64(&wp.bytesDownloaded, result.BytesWritten)
-
-				// Update file status in database
-				result.Task.File.Status = state.FileStatusCompleted
-				result.Task.File.BytesDownloaded = result.Task.File.Size
-				if err := wp.stateManager.UpdateFileStatus(wp.ctx, result.Task.File); err != nil {
-					wp.logger.Error(err, "Failed to update file status",
-						"file_id", result.Task.File.ID,
-						"status", result.Task.File.Status,
-					)
-				}
-
-				// Notify progress tracker
-				wp.progressTracker.FileCompleted(result.Task.File.ID)
-			} else {
-				atomic.AddInt64(&wp.tasksFailed, 1)
-
-				// Handle retry logic
-				if result.Task.Retries < wp.maxRetries {
-					result.Task.Retries++
-					result.Task.LastError = result.Error
-
-					// Calculate retry priority (lower priority for retries)
-					result.Task.Priority += 1000 * result.Task.Retries
-
-					// Re-queue the task
-					wp.taskQueue.Push(result.Task)
-
-					wp.logger.Warn("Retrying download task",
-						"file_id", result.Task.File.ID,
-						"attempt", result.Task.Retries,
-						"error", result.Error,
-					)
-				} else {
-					// Max retries exceeded
-					result.Task.File.Status = state.FileStatusFailed
-					result.Task.File.ErrorMessage.Valid = true
-					result.Task.File.ErrorMessage.String = result.Error.Error()
-
-					if err := wp.stateManager.UpdateFileStatus(wp.ctx, result.Task.File); err != nil {
-						wp.logger.Error(err, "Failed to update file status",
-							"file_id", result.Task.File.ID,
-							"status", result.Task.File.Status,
-						)
-					}
-
-					// Notify progress tracker
-					wp.progressTracker.FileFailed(result.Task.File.ID, result.Error)
-
-					wp.logger.Error(result.Error, "Download task failed after max retries",
-						"file_id", result.Task.File.ID,
-						"attempts", result.Task.Retries,
-					)
-				}
+				wp.handleSuccessfulResult(result)
+				continue
 			}
+
+			wp.handleFailedResult(result)
 		}
 	}
+}
+
+func (wp *WorkerPool) handleSuccessfulResult(result *TaskResult) {
+	atomic.AddInt64(&wp.tasksSucceeded, 1)
+	atomic.AddInt64(&wp.bytesDownloaded, result.BytesWritten)
+
+	// Update file status in database
+	result.Task.File.Status = state.FileStatusCompleted
+	result.Task.File.BytesDownloaded = result.Task.File.Size
+	if err := wp.stateManager.UpdateFileStatus(wp.ctx, result.Task.File); err != nil {
+		wp.logger.Error(err, "Failed to update file status",
+			"file_id", result.Task.File.ID,
+			"status", result.Task.File.Status,
+		)
+	}
+
+	// Notify progress tracker
+	wp.progressTracker.FileCompleted(result.Task.File.ID)
+}
+
+func (wp *WorkerPool) handleFailedResult(result *TaskResult) {
+	atomic.AddInt64(&wp.tasksFailed, 1)
+
+	// Handle retry logic
+	if result.Task.Retries < wp.maxRetries {
+		result.Task.Retries++
+		result.Task.LastError = result.Error
+
+		// Calculate retry priority (lower priority for retries)
+		result.Task.Priority += 1000 * result.Task.Retries
+
+		// Re-queue the task
+		wp.taskQueue.Push(result.Task)
+
+		wp.logger.Warn("Retrying download task",
+			"file_id", result.Task.File.ID,
+			"attempt", result.Task.Retries,
+			"error", result.Error,
+		)
+		return
+	}
+
+	// Max retries exceeded
+	result.Task.File.Status = state.FileStatusFailed
+	result.Task.File.ErrorMessage.Valid = true
+	result.Task.File.ErrorMessage.String = result.Error.Error()
+
+	if err := wp.stateManager.UpdateFileStatus(wp.ctx, result.Task.File); err != nil {
+		wp.logger.Error(err, "Failed to update file status",
+			"file_id", result.Task.File.ID,
+			"status", result.Task.File.Status,
+		)
+	}
+
+	// Notify progress tracker
+	wp.progressTracker.FileFailed(result.Task.File.ID, result.Error)
+
+	wp.logger.Error(result.Error, "Download task failed after max retries",
+		"file_id", result.Task.File.ID,
+		"attempts", result.Task.Retries,
+	)
 }
 
 // Worker methods
@@ -553,7 +563,12 @@ func (pq *PriorityQueue) Pop() *DownloadTask {
 		return nil
 	}
 
-	return heap.Pop(&pq.items).(*DownloadTask)
+	item := heap.Pop(&pq.items)
+	task, ok := item.(*DownloadTask)
+	if !ok {
+		panic(fmt.Sprintf("unexpected item type in PriorityQueue.Pop: %T", item))
+	}
+	return task
 }
 
 // Len returns the number of tasks in the queue.
@@ -572,7 +587,11 @@ func (h taskHeap) Less(i, j int) bool { return h[i].Priority < h[j].Priority }
 func (h taskHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
 
 func (h *taskHeap) Push(x interface{}) {
-	*h = append(*h, x.(*DownloadTask))
+	task, ok := x.(*DownloadTask)
+	if !ok {
+		panic(fmt.Sprintf("unexpected item type in taskHeap.Push: %T", x))
+	}
+	*h = append(*h, task)
 }
 
 func (h *taskHeap) Pop() interface{} {

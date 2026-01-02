@@ -48,7 +48,6 @@ type DownloadManager struct {
 	tempDir         string
 	chunkSize       int64
 	maxConcurrent   int
-	mu              sync.RWMutex
 	verifyChecksums bool
 }
 
@@ -75,6 +74,51 @@ type DownloadStats struct {
 	FailedDownloads    int64
 	BytesDownloaded    int64
 	TotalDuration      time.Duration
+}
+
+// IncrementDownloads atomically increments the total downloads count by 1.
+func (ds *DownloadStats) IncrementDownloads() {
+	ds.mu.Lock()
+	ds.TotalDownloads++
+	ds.mu.Unlock()
+}
+
+// AddBytes atomically adds n bytes to the total bytes downloaded.
+func (ds *DownloadStats) AddBytes(n int64) {
+	ds.mu.Lock()
+	ds.BytesDownloaded += n
+	ds.mu.Unlock()
+}
+
+// IncrementDownloadsAndActive increments the total and active download counts together.
+func (ds *DownloadStats) IncrementDownloadsAndActive() {
+	ds.mu.Lock()
+	ds.TotalDownloads++
+	ds.ActiveDownloads++
+	ds.mu.Unlock()
+}
+
+// DecrementActiveDownloads decrements the active download count by 1.
+func (ds *DownloadStats) DecrementActiveDownloads() {
+	ds.mu.Lock()
+	ds.ActiveDownloads--
+	ds.mu.Unlock()
+}
+
+// IncrementFailedDownloads increments the failed download count by 1.
+func (ds *DownloadStats) IncrementFailedDownloads() {
+	ds.mu.Lock()
+	ds.FailedDownloads++
+	ds.mu.Unlock()
+}
+
+// CompleteDownload updates all completion-related fields together.
+func (ds *DownloadStats) CompleteDownload(bytes int64, duration time.Duration) {
+	ds.mu.Lock()
+	ds.CompletedDownloads++
+	ds.BytesDownloaded += bytes
+	ds.TotalDuration += duration
+	ds.mu.Unlock()
 }
 
 // DownloadManagerConfig contains configuration for the download manager.
@@ -278,16 +322,8 @@ func (dm *DownloadManager) DownloadFile(ctx context.Context, file *state.File) e
 	defer dm.activeDownloads.Delete(file.ID)
 
 	// Update stats
-	dm.downloadStats.mu.Lock()
-	dm.downloadStats.TotalDownloads++
-	dm.downloadStats.ActiveDownloads++
-	dm.downloadStats.mu.Unlock()
-
-	defer func() {
-		dm.downloadStats.mu.Lock()
-		dm.downloadStats.ActiveDownloads--
-		dm.downloadStats.mu.Unlock()
-	}()
+	dm.downloadStats.IncrementDownloadsAndActive()
+	defer dm.downloadStats.DecrementActiveDownloads()
 
 	// Perform download
 	if file.IsGoogleDoc {
@@ -297,9 +333,7 @@ func (dm *DownloadManager) DownloadFile(ctx context.Context, file *state.File) e
 	}
 
 	if err != nil {
-		dm.downloadStats.mu.Lock()
-		dm.downloadStats.FailedDownloads++
-		dm.downloadStats.mu.Unlock()
+		dm.downloadStats.IncrementFailedDownloads()
 		return err
 	}
 
@@ -322,11 +356,7 @@ func (dm *DownloadManager) DownloadFile(ctx context.Context, file *state.File) e
 	}
 
 	// Update stats
-	dm.downloadStats.mu.Lock()
-	dm.downloadStats.CompletedDownloads++
-	dm.downloadStats.BytesDownloaded += file.Size
-	dm.downloadStats.TotalDuration += time.Since(downloadInfo.StartTime)
-	dm.downloadStats.mu.Unlock()
+	dm.downloadStats.CompleteDownload(file.Size, time.Since(downloadInfo.StartTime))
 
 	return nil
 }
@@ -463,7 +493,7 @@ func (dm *DownloadManager) downloadWithResume(
 			case <-time.After(time.Duration(retries) * time.Second):
 				continue
 			case <-ctx.Done():
-				return ctx.Err()
+				return errors.Wrap(ctx.Err(), "download canceled")
 			}
 		}
 
@@ -567,13 +597,14 @@ func (dm *DownloadManager) calculatePriorities(files []*state.File) map[string]i
 
 	// Sort by size (smallest first gets higher priority = lower number)
 	for i, file := range files {
-		if file.Size < 1024*1024 { // < 1MB
+		switch {
+		case file.Size < 1024*1024: // < 1MB
 			priorities[file.ID] = i
-		} else if file.Size < 10*1024*1024 { // < 10MB
+		case file.Size < 10*1024*1024: // < 10MB
 			priorities[file.ID] = i + 1000
-		} else if file.Size < 100*1024*1024 { // < 100MB
+		case file.Size < 100*1024*1024: // < 100MB
 			priorities[file.ID] = i + 2000
-		} else {
+		default:
 			priorities[file.ID] = i + 3000
 		}
 	}
@@ -609,47 +640,61 @@ func (dm *DownloadManager) getExportExtension(mimeType string) string {
 // cleanupTempFiles removes all temporary files.
 func (dm *DownloadManager) cleanupTempFiles() error {
 	// First, clean up any active downloads
-	dm.activeDownloads.Range(func(key, value interface{}) bool {
-		if info, ok := value.(*DownloadInfo); ok {
-			if _, err := os.Stat(info.TempPath); err == nil {
-				dm.logger.Debug("Removing temp file", "path", info.TempPath)
-				if err := os.Remove(info.TempPath); err != nil {
-					dm.logger.Error(err, "failed to remove temp file during cleanup", "path", info.TempPath)
-				}
-			}
+	dm.activeDownloads.Range(func(_ any, value any) bool {
+		info, ok := value.(*DownloadInfo)
+		if !ok || info.TempPath == "" {
+			return true
+		}
+		if _, err := os.Stat(info.TempPath); err != nil {
+			return true
+		}
+
+		dm.logger.Debug("Removing temp file", "path", info.TempPath)
+		if err := os.Remove(info.TempPath); err != nil {
+			dm.logger.Error(err, "failed to remove temp file during cleanup", "path", info.TempPath)
 		}
 		return true
 	})
 
 	// Then, clean up all files in temp directory from previous runs
-	if dm.tempDir != "" {
-		// Create temp directory if it doesn't exist
-		if err := os.MkdirAll(dm.tempDir, 0750); err != nil {
-			return errors.Wrap(err, "failed to create temp directory")
+	if dm.tempDir == "" {
+		return nil
+	}
+
+	info, err := os.Stat(dm.tempDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return errors.Wrap(err, "failed to stat temp directory")
+	}
+	if !info.IsDir() {
+		return nil
+	}
+
+	// Read all files in temp directory.
+	entries, err := os.ReadDir(dm.tempDir)
+	if err != nil {
+		return errors.Wrap(err, "failed to read temp directory")
+	}
+
+	// Remove all files (they're all temporary from previous runs).
+	removedCount := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
 		}
 
-		// Read all files in temp directory
-		entries, err := os.ReadDir(dm.tempDir)
-		if err != nil {
-			return errors.Wrap(err, "failed to read temp directory")
+		filePath := filepath.Join(dm.tempDir, entry.Name())
+		if err := os.Remove(filePath); err != nil {
+			dm.logger.Warn("Failed to remove temp file", "file", filePath, "error", err)
+			continue
 		}
+		removedCount++
+	}
 
-		// Remove all files (they're all temporary from previous runs)
-		removedCount := 0
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				filePath := filepath.Join(dm.tempDir, entry.Name())
-				if err := os.Remove(filePath); err != nil {
-					dm.logger.Warn("Failed to remove temp file", "file", filePath, "error", err)
-				} else {
-					removedCount++
-				}
-			}
-		}
-
-		if removedCount > 0 {
-			dm.logger.Info("Cleaned up old temporary files", "count", removedCount, "directory", dm.tempDir)
-		}
+	if removedCount > 0 {
+		dm.logger.Info("Cleaned up old temporary files", "count", removedCount, "directory", dm.tempDir)
 	}
 
 	return nil

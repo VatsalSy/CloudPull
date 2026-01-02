@@ -2,7 +2,7 @@
 
 Fast, resumable Google Drive folder synchronization tool with rsync-like functionality.
 
-[![Go Version](https://img.shields.io/badge/go-1.21%2B-blue)](https://golang.org/dl/)
+[![Go Version](https://img.shields.io/badge/go-1.24%2B-blue)](https://golang.org/dl/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ## Features
@@ -34,6 +34,8 @@ Fast, resumable Google Drive folder synchronization tool with rsync-like functio
 
 ## Installation
 
+> CloudPull supports **macOS** and **Linux**. Windows is not currently supported; please use **WSL2** (Windows Subsystem for Linux) and run CloudPull inside your Linux distro.
+
 ### From Source
 
 ```bash
@@ -60,7 +62,7 @@ make install
 
 ### Pre-built Binaries
 
-Download the latest release for your platform from the [releases page](https://github.com/VatsalSy/CloudPull/releases).
+Download the latest release for macOS or Linux from the [releases page](https://github.com/VatsalSy/CloudPull/releases). Windows is not currently supported; please use WSL2.
 
 ## OAuth Setup
 
@@ -379,8 +381,10 @@ make build
    export HTTP_PROXY=http://proxy.example.com:8080
    export HTTPS_PROXY=http://proxy.example.com:8080
    ```
-6. **Large file download failures** - For files over 1GB, ensure you have sufficient disk space and stable connection. CloudPull will automatically resume interrupted downloads. You can also reduce chunk size in the config.
-7. **Google Drive quota exceeded** - This occurs when you hit daily download limits (10TB/day). Wait 24 hours or spread downloads across multiple days. Check quota status at <https://drive.google.com/settings/storage>
+6. **Large file download failures** - For files over 1GB, ensure you have sufficient disk space and a stable
+   connection. CloudPull will automatically resume interrupted downloads. You can also reduce chunk size in config.
+7. **Google Drive quota exceeded** - This occurs when you hit daily download limits (10TB/day). Wait 24 hours or
+   spread downloads across multiple days.
 8. **SQLite database corruption** - If you see "database disk image is malformed" errors, delete the corrupted database and restart:
    ```bash
    rm ~/.cloudpull/cloudpull.db

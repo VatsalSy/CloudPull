@@ -131,18 +131,18 @@ func FormatBytes(bytes int64) string {
 }
 
 // FormatDuration formats a duration into human readable format.
-func FormatDuration(d time.Duration) string {
-	if d < time.Minute {
-		secs := int(d.Seconds())
+func FormatDuration(duration time.Duration) string {
+	if duration < time.Minute {
+		secs := int(duration.Seconds())
 		if secs == 1 {
 			return "1 second"
 		}
 		return fmt.Sprintf("%d seconds", secs)
 	}
 
-	if d < time.Hour {
-		mins := int(d.Minutes())
-		secs := int(d.Seconds()) % 60
+	if duration < time.Hour {
+		mins := int(duration.Minutes())
+		secs := int(duration.Seconds()) % 60
 		minUnit := "minutes"
 		if mins == 1 {
 			minUnit = "minute"
@@ -154,8 +154,8 @@ func FormatDuration(d time.Duration) string {
 		return fmt.Sprintf("%d %s %d %s", mins, minUnit, secs, secUnit)
 	}
 
-	hours := int(d.Hours())
-	mins := int(d.Minutes()) % 60
+	hours := int(duration.Hours())
+	mins := int(duration.Minutes()) % 60
 	hourUnit := "hours"
 	if hours == 1 {
 		hourUnit = "hour"

@@ -2,6 +2,8 @@
 
 ## Installation
 
+> CloudPull supports macOS and Linux. Windows is not currently supported; please use WSL2 (Windows Subsystem for Linux).
+
 ```bash
 # Clone the repository
 git clone https://github.com/VatsalSy/CloudPull.git

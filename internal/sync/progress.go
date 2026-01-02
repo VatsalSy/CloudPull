@@ -19,6 +19,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/VatsalSy/CloudPull/internal/errors"
 )
 
 // ProgressEventType defines types of progress events.
@@ -368,7 +370,7 @@ func (pt *ProgressTracker) CheckBandwidthLimit(ctx context.Context, bytesRequest
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return errors.Errorf("bandwidth limit wait canceled: %w", ctx.Err())
 		case <-timer.C:
 			pt.bytesThisPeriod = bytesRequested
 			pt.periodStart = time.Now()

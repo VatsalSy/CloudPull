@@ -20,6 +20,8 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -59,6 +61,14 @@ func DefaultConfig() DBConfig {
 
 // NewDB creates a new database connection.
 func NewDB(cfg DBConfig) (*DB, error) {
+	if cfg.Path != "" {
+		if dir := filepath.Dir(cfg.Path); dir != "." {
+			if err := os.MkdirAll(dir, 0750); err != nil {
+				return nil, fmt.Errorf("failed to create database directory: %w", err)
+			}
+		}
+	}
+
 	// Open database connection
 	db, err := sqlx.Open("sqlite3", fmt.Sprintf("%s?_foreign_keys=on&_journal_mode=WAL", cfg.Path))
 	if err != nil {
@@ -135,7 +145,10 @@ func (db *DB) Close() error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	return db.DB.Close()
+	if err := db.DB.Close(); err != nil {
+		return fmt.Errorf("close database: %w", err)
+	}
+	return nil
 }
 
 // WithTx executes a function within a transaction.
@@ -190,7 +203,10 @@ func (db *DB) WithReadTx(ctx context.Context, fn func(*sqlx.Tx) error) error {
 // Vacuum performs database maintenance.
 func (db *DB) Vacuum(ctx context.Context) error {
 	_, err := db.ExecContext(ctx, "VACUUM")
-	return err
+	if err != nil {
+		return fmt.Errorf("vacuum database: %w", err)
+	}
+	return nil
 }
 
 // Stats returns database statistics.
@@ -216,15 +232,25 @@ func (db *DB) HealthCheck(ctx context.Context) error {
 
 // Exec is a wrapper around sqlx.Exec that uses context.
 func (db *DB) Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	return db.ExecContext(ctx, query, args...)
+	result, err := db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("exec query: %w", err)
+	}
+	return result, nil
 }
 
 // Get is a wrapper around sqlx.Get that uses context.
 func (db *DB) Get(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
-	return db.GetContext(ctx, dest, query, args...)
+	if err := db.GetContext(ctx, dest, query, args...); err != nil {
+		return fmt.Errorf("get query result: %w", err)
+	}
+	return nil
 }
 
 // Select is a wrapper around sqlx.Select that uses context.
 func (db *DB) Select(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
-	return db.SelectContext(ctx, dest, query, args...)
+	if err := db.SelectContext(ctx, dest, query, args...); err != nil {
+		return fmt.Errorf("select query results: %w", err)
+	}
+	return nil
 }

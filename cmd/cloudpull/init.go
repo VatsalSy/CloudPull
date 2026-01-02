@@ -49,36 +49,47 @@ func init() {
 		"Don't automatically open browser for authentication")
 }
 
-func runInit(cmd *cobra.Command, args []string) error {
-	fmt.Println(color.CyanString("🚀 Welcome to CloudPull Setup"))
-	fmt.Println()
+// setupConfig holds the configuration values collected during init.
+type setupConfig struct {
+	DefaultSyncDir  string
+	MaxConcurrent   string
+	ChunkSize       string
+	BandwidthLimit  string
+	EnableBandwidth bool
+}
 
-	// Check if already initialized
-	configPath := viper.ConfigFileUsed()
-	if configPath == "" {
-		home, _ := os.UserHomeDir()
-		configPath = filepath.Join(home, ".cloudpull", "config.yaml")
+// checkExistingConfig checks if a config already exists and prompts for overwrite.
+// Returns true if we should continue with setup, false if user declined.
+func checkExistingConfig(configPath string) (bool, error) {
+	_, err := os.Stat(configPath)
+	if os.IsNotExist(err) {
+		return true, nil // Config doesn't exist, continue with setup
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to check config file: %w", err)
 	}
 
-	if _, err := os.Stat(configPath); err == nil {
-		var overwrite bool
-		prompt := &survey.Confirm{
-			Message: "CloudPull is already configured. Reconfiguring will:\n" +
-				"  • Delete your current configuration settings\n" +
-				"  • Remove saved Google Drive authentication\n" +
-				"  • Clear all sync history and progress\n" +
-				"  • Require re-authentication with Google\n\n" +
-				"Do you want to proceed with reconfiguration?",
-			Default: false,
-		}
-		survey.AskOne(prompt, &overwrite)
-		if !overwrite {
-			return nil
-		}
+	var overwrite bool
+	prompt := &survey.Confirm{
+		Message: "CloudPull is already configured. Reconfiguring will:\n" +
+			"  • Delete your current configuration settings\n" +
+			"  • Remove saved Google Drive authentication\n" +
+			"  • Clear all sync history and progress\n" +
+			"  • Require re-authentication with Google\n\n" +
+			"Do you want to proceed with reconfiguration?",
+		Default: false,
 	}
+	if err := survey.AskOne(prompt, &overwrite); err != nil {
+		return false, fmt.Errorf("failed to get user input: %w", err)
+	}
+	return overwrite, nil
+}
 
-	// Step 1: Get credentials
-	if credentialsFile == "" {
+// getCredentialsPath prompts for and validates the credentials file path.
+func getCredentialsPath() (string, error) {
+	credsPath := credentialsFile
+
+	if credsPath == "" {
 		fmt.Println(color.YellowString("\n📋 Step 1: Google Cloud Credentials"))
 		fmt.Println("To use CloudPull, you need OAuth2 credentials from Google Cloud Console.")
 		fmt.Println("\nFollow these steps:")
@@ -96,34 +107,33 @@ func runInit(cmd *cobra.Command, args []string) error {
 				return files
 			},
 		}
-		survey.AskOne(prompt, &credentialsFile, survey.WithValidator(survey.Required))
+		if err := survey.AskOne(prompt, &credsPath, survey.WithValidator(survey.Required)); err != nil {
+			return "", fmt.Errorf("failed to get credentials path: %w", err)
+		}
 	}
 
 	// Expand tilde in credentials file path
-	if strings.HasPrefix(credentialsFile, "~") {
+	if strings.HasPrefix(credsPath, "~") {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return fmt.Errorf("failed to get user home directory: %w", err)
+			return "", fmt.Errorf("failed to get user home directory: %w", err)
 		}
-		credentialsFile = filepath.Join(homeDir, credentialsFile[1:])
+		credsPath = filepath.Join(homeDir, credsPath[1:])
 	}
 
 	// Validate credentials file
-	if _, err := os.Stat(credentialsFile); err != nil {
-		return fmt.Errorf("credentials file not found: %s", credentialsFile)
+	if _, err := os.Stat(credsPath); err != nil {
+		return "", fmt.Errorf("credentials file not found: %s", credsPath)
 	}
 
-	// Step 2: Configure settings
+	return credsPath, nil
+}
+
+// promptSetupConfig prompts for configuration settings.
+func promptSetupConfig() (*setupConfig, error) {
 	fmt.Println(color.YellowString("\n⚙️  Step 2: Configuration"))
 
-	var config struct {
-		DefaultSyncDir  string
-		MaxConcurrent   string
-		ChunkSize       string
-		BandwidthLimit  string
-		EnableBandwidth bool
-	}
-
+	cfg := &setupConfig{}
 	questions := []*survey.Question{
 		{
 			Name: "DefaultSyncDir",
@@ -156,49 +166,51 @@ func runInit(cmd *cobra.Command, args []string) error {
 		},
 	}
 
-	if err := survey.Ask(questions, &config); err != nil {
-		return err
+	if err := survey.Ask(questions, cfg); err != nil {
+		return nil, fmt.Errorf("failed to collect configuration: %w", err)
 	}
 
-	if config.EnableBandwidth {
+	if cfg.EnableBandwidth {
 		bandwidthPrompt := &survey.Input{
 			Message: "Bandwidth limit (MB/s):",
 			Default: "10",
 		}
-		if err := survey.AskOne(bandwidthPrompt, &config.BandwidthLimit); err != nil {
-			return err
+		if err := survey.AskOne(bandwidthPrompt, &cfg.BandwidthLimit); err != nil {
+			return nil, fmt.Errorf("failed to get bandwidth limit: %w", err)
 		}
 	}
 
-	// Step 3: Save configuration
+	return cfg, nil
+}
+
+// saveSetupConfig saves the configuration to file.
+func saveSetupConfig(configPath, credsPath string, cfg *setupConfig) error {
 	fmt.Println(color.YellowString("\n💾 Step 3: Saving Configuration"))
 
-	// Parse numeric values
-	maxConcurrent, err := strconv.Atoi(config.MaxConcurrent)
+	maxConcurrent, err := strconv.Atoi(cfg.MaxConcurrent)
 	if err != nil {
 		return fmt.Errorf("invalid max concurrent value: %w", err)
 	}
 
 	var bandwidthLimit int
-	if config.EnableBandwidth {
-		bandwidthLimit, err = strconv.Atoi(config.BandwidthLimit)
+	if cfg.EnableBandwidth {
+		bandwidthLimit, err = strconv.Atoi(cfg.BandwidthLimit)
 		if err != nil {
 			return fmt.Errorf("invalid bandwidth limit value: %w", err)
 		}
 	}
 
-	// Parse chunk size to bytes
-	chunkSizeBytes, err := parseChunkSize(config.ChunkSize)
+	chunkSizeBytes, err := parseChunkSize(cfg.ChunkSize)
 	if err != nil {
 		return fmt.Errorf("invalid chunk size: %w", err)
 	}
 
-	viper.Set("credentials_file", credentialsFile)
-	viper.Set("sync.default_directory", config.DefaultSyncDir)
+	viper.Set("credentials_file", credsPath)
+	viper.Set("sync.default_directory", cfg.DefaultSyncDir)
 	viper.Set("sync.max_concurrent", maxConcurrent)
-	viper.Set("sync.chunk_size", config.ChunkSize)
+	viper.Set("sync.chunk_size", cfg.ChunkSize)
 	viper.Set("sync.chunk_size_bytes", chunkSizeBytes)
-	if config.EnableBandwidth {
+	if cfg.EnableBandwidth {
 		viper.Set("sync.bandwidth_limit", bandwidthLimit)
 	}
 
@@ -211,40 +223,90 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}
 
-	// Step 4: Authenticate
+	return nil
+}
+
+// performAuthentication handles the OAuth2 authentication flow.
+func performAuthentication() error {
 	fmt.Println(color.YellowString("\n🔐 Step 4: Authentication"))
 	fmt.Println("CloudPull needs to authenticate with Google Drive.")
 
-	if !skipBrowser {
-		// Initialize app
-		application, err := app.New()
-		if err != nil {
-			return fmt.Errorf("failed to create application: %w", err)
-		}
-
-		if err := application.Initialize(); err != nil {
-			return fmt.Errorf("failed to initialize application: %w", err)
-		}
-
-		if err := application.InitializeAuth(); err != nil {
-			return fmt.Errorf("failed to initialize authentication: %w", err)
-		}
-
-		// Perform authentication
-		fmt.Println("\nStarting authentication flow...")
-		if err := application.Authenticate(context.Background()); err != nil {
-			// Check for user cancellation or denial
-			var oauth2Err *oauth2.RetrieveError
-			if errors.As(err, &oauth2Err) && strings.Contains(oauth2Err.ErrorDescription, "access_denied") {
-				return fmt.Errorf("authentication canceled: user denied access")
-			}
-			if errors.Is(err, io.EOF) {
-				return fmt.Errorf("authentication canceled by user")
-			}
-			return fmt.Errorf("authentication failed: %w", err)
-		}
-	} else {
+	if skipBrowser {
 		fmt.Println("Run 'cloudpull auth' to complete authentication.")
+		return nil
+	}
+
+	application, err := app.New()
+	if err != nil {
+		return fmt.Errorf("failed to create application: %w", err)
+	}
+
+	if err := application.Initialize(); err != nil {
+		return fmt.Errorf("failed to initialize application: %w", err)
+	}
+
+	if err := application.InitializeAuth(); err != nil {
+		return fmt.Errorf("failed to initialize authentication: %w", err)
+	}
+
+	fmt.Println("\nStarting authentication flow...")
+	if err := application.Authenticate(context.Background()); err != nil {
+		var oauth2Err *oauth2.RetrieveError
+		if errors.As(err, &oauth2Err) && strings.Contains(oauth2Err.ErrorDescription, "access_denied") {
+			return fmt.Errorf("authentication canceled: user denied access")
+		}
+		if errors.Is(err, io.EOF) {
+			return fmt.Errorf("authentication canceled by user")
+		}
+		return fmt.Errorf("authentication failed: %w", err)
+	}
+
+	return nil
+}
+
+func runInit(cmd *cobra.Command, args []string) error {
+	fmt.Println(color.CyanString("🚀 Welcome to CloudPull Setup"))
+	fmt.Println()
+
+	// Get config path
+	configPath := viper.ConfigFileUsed()
+	if configPath == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("could not determine user home directory: %w", err)
+		}
+		configPath = filepath.Join(home, ".cloudpull", "config.yaml")
+	}
+
+	// Check if already initialized
+	shouldContinue, err := checkExistingConfig(configPath)
+	if err != nil {
+		return err
+	}
+	if !shouldContinue {
+		return nil
+	}
+
+	// Get credentials path
+	credsPath, err := getCredentialsPath()
+	if err != nil {
+		return err
+	}
+
+	// Prompt for configuration
+	cfg, err := promptSetupConfig()
+	if err != nil {
+		return err
+	}
+
+	// Save configuration
+	if err := saveSetupConfig(configPath, credsPath, cfg); err != nil {
+		return err
+	}
+
+	// Perform authentication
+	if err := performAuthentication(); err != nil {
+		return err
 	}
 
 	fmt.Println(color.GreenString("\n✅ CloudPull initialized successfully!"))
@@ -260,13 +322,14 @@ func parseChunkSize(size string) (int64, error) {
 	size = strings.ToUpper(strings.TrimSpace(size))
 	multiplier := int64(1)
 
-	if strings.HasSuffix(size, "KB") {
+	switch {
+	case strings.HasSuffix(size, "KB"):
 		multiplier = 1024
 		size = strings.TrimSuffix(size, "KB")
-	} else if strings.HasSuffix(size, "MB") {
+	case strings.HasSuffix(size, "MB"):
 		multiplier = 1024 * 1024
 		size = strings.TrimSuffix(size, "MB")
-	} else if strings.HasSuffix(size, "GB") {
+	case strings.HasSuffix(size, "GB"):
 		multiplier = 1024 * 1024 * 1024
 		size = strings.TrimSuffix(size, "GB")
 	}

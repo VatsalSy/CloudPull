@@ -12,6 +12,7 @@ package errors
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -132,6 +133,9 @@ func (h *Handler) HandleError(ctx context.Context, err *Error) RecoveryStrategy 
 
 	// Determine recovery strategy based on error type
 	switch err.Type {
+	case ErrorTypeUnknown, ErrorTypeAPI, ErrorTypeContext:
+		return RecoveryStrategyNone
+
 	case ErrorTypePermission, ErrorTypeConfiguration:
 		return RecoveryStrategyNone
 
@@ -203,7 +207,7 @@ func (h *Handler) WaitForRetry(ctx context.Context, err *Error) error {
 
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return Wrap(ctx.Err(), "context done")
 	case <-timer.C:
 		return nil
 	}
@@ -351,7 +355,8 @@ func WrapWithContext(ctx context.Context, err error, op, path string) *Error {
 	}
 
 	// Check if already wrapped
-	if e, ok := err.(*Error); ok {
+	var e *Error
+	if errors.As(err, &e) {
 		return e
 	}
 
@@ -363,7 +368,7 @@ func WrapWithContext(ctx context.Context, err error, op, path string) *Error {
 
 	// Add context information
 	if deadline, ok := ctx.Deadline(); ok {
-		wrapped.WithContext("deadline", deadline)
+		wrapped = wrapped.WithContext("deadline", deadline)
 	}
 
 	return wrapped

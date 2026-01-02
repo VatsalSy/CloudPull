@@ -189,7 +189,7 @@ func RetryOperation(
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return ctx.Err()
+			return Wrap(ctx.Err(), "context done")
 		case <-timer.C:
 			// Continue to next attempt
 		}

@@ -2,13 +2,15 @@ package api
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/googleapi"
 
-	"github.com/VatsalSy/CloudPull/internal/errors"
+	apperrors "github.com/VatsalSy/CloudPull/internal/errors"
 	"github.com/VatsalSy/CloudPull/internal/logger"
 )
 
@@ -67,7 +69,6 @@ type BatchProcessor struct {
 	logger      *logger.Logger
 	results     chan BatchResponse
 	cancel      context.CancelFunc
-	workers     chan struct{}
 	jobs        chan BatchRequest
 	queue       []BatchRequest
 	wg          sync.WaitGroup
@@ -100,14 +101,18 @@ func (bp *BatchProcessor) AddRequest(req BatchRequest) error {
 	defer bp.mu.Unlock()
 
 	if len(bp.queue) >= maxBatchSize*10 {
-		return errors.New(errors.ErrorTypeAPI, "batch_queue_full", "Batch queue is full", nil)
+		return apperrors.New(apperrors.ErrorTypeAPI, "batch_queue_full", "Batch queue is full", nil)
 	}
 
 	bp.queue = append(bp.queue, req)
 
 	// Start processing if we have enough requests
 	if len(bp.queue) >= maxBatchSize && !bp.processing {
-		go bp.processQueue(context.Background())
+		go func() {
+			if err := bp.processQueue(context.Background()); err != nil {
+				bp.logger.Error(err, "Failed to process batch queue")
+			}
+		}()
 	}
 
 	return nil
@@ -145,7 +150,7 @@ func (bp *BatchProcessor) processQueue(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			bp.logger.Info("Context canceled, stopping queue processing")
-			return ctx.Err()
+			return fmt.Errorf("queue processing canceled: %w", ctx.Err())
 		default:
 			batch := bp.dequeueBatch()
 			if len(batch) == 0 {
@@ -240,7 +245,7 @@ func (bp *BatchProcessor) processBatch(ctx context.Context, batch []BatchRequest
 	for _, req := range batch {
 		select {
 		case <-batchCtx.Done():
-			return batchCtx.Err()
+			return fmt.Errorf("batch processing timed out: %w", batchCtx.Err())
 		case bp.jobs <- req:
 			// Request sent to worker
 		}
@@ -284,7 +289,8 @@ func (bp *BatchProcessor) executeRevisionsRequest(ctx context.Context, req Batch
 func (bp *BatchProcessor) handleBatchResponse(req BatchRequest, data interface{}, err error) {
 	// Handle API errors
 	if err != nil {
-		if apiErr, ok := err.(*googleapi.Error); ok {
+		var apiErr *googleapi.Error
+		if errors.As(err, &apiErr) {
 			bp.logger.Debug("Batch request failed",
 				"file_id", req.FileID,
 				"type", req.Type,

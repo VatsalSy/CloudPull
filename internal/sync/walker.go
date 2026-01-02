@@ -221,7 +221,7 @@ func (fw *FolderWalker) walkBFS(rootFolderID string, sessionID string, resultCha
 
 	for i := 0; i < workers; i++ {
 		workerWg.Add(1)
-		go func(workerID int) {
+		go func() {
 			defer workerWg.Done()
 
 			for task := range queue {
@@ -294,7 +294,7 @@ func (fw *FolderWalker) walkBFS(rootFolderID string, sessionID string, resultCha
 
 				activeTasksWg.Done() // Mark this task as done
 			}
-		}(i)
+		}()
 	}
 
 	// Start with root folder
@@ -436,7 +436,7 @@ func (fw *FolderWalker) processFolder(
 	for {
 		// Check context
 		if fw.ctx.Err() != nil {
-			return folder, allFiles, subfolders, fw.ctx.Err()
+			return folder, allFiles, subfolders, fmt.Errorf("folder walk canceled: %w", fw.ctx.Err())
 		}
 
 		// List files
@@ -445,7 +445,9 @@ func (fw *FolderWalker) processFolder(
 			folder.Status = state.FolderStatusFailed
 			folder.ErrorMessage.Valid = true
 			folder.ErrorMessage.String = err.Error()
-			fw.stateManager.UpdateFolder(fw.ctx, folder)
+			if updateErr := fw.stateManager.UpdateFolder(fw.ctx, folder); updateErr != nil {
+				fw.logger.Error(updateErr, "Failed to update folder status")
+			}
 
 			fw.mu.Lock()
 			fw.errors = append(fw.errors, err)
@@ -511,7 +513,9 @@ func (fw *FolderWalker) processFolder(
 
 	// Update folder status
 	folder.Status = state.FolderStatusScanned
-	fw.stateManager.UpdateFolder(fw.ctx, folder)
+	if updateErr := fw.stateManager.UpdateFolder(fw.ctx, folder); updateErr != nil {
+		fw.logger.Error(updateErr, "Failed to update folder status")
+	}
 
 	// Update metrics
 	fw.mu.Lock()

@@ -13,7 +13,7 @@ to local storage.
 - **Rate Limiting**: Respect Google Drive API quotas
 - **Concurrent Downloads**: Maximize throughput with parallel transfers
 - **State Management**: SQLite-based tracking for reliability
-- **Cross-Platform**: Single binary for Windows, Mac, and Linux
+- **Cross-Platform**: Single binary for macOS and Linux (Windows via WSL2)
 
 ## Technology Stack
 

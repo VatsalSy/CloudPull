@@ -254,7 +254,7 @@ func (l *Logger) StructuredError(err error, fields map[string]interface{}) {
 func (l *Logger) SetLevel(level string) error {
 	parsedLevel, err := zerolog.ParseLevel(level)
 	if err != nil {
-		return err
+		return fmt.Errorf("parse log level: %w", err)
 	}
 
 	l.logger = l.logger.Level(parsedLevel)
@@ -372,21 +372,27 @@ func NewFileWriter(filename string, maxSize int64, maxBackups int) (*FileWriter,
 func (fw *FileWriter) Write(p []byte) (n int, err error) {
 	// Check if rotation is needed
 	if fw.file != nil {
-		info, err := fw.file.Stat()
-		if err == nil && info.Size()+int64(len(p)) > fw.maxSize {
+		info, statErr := fw.file.Stat()
+		if statErr == nil && info.Size()+int64(len(p)) > fw.maxSize {
 			if err := fw.rotate(); err != nil {
 				return 0, err
 			}
 		}
 	}
 
-	return fw.file.Write(p)
+	n, err = fw.file.Write(p)
+	if err != nil {
+		return n, fmt.Errorf("write log file: %w", err)
+	}
+	return n, nil
 }
 
 // Close closes the file writer.
 func (fw *FileWriter) Close() error {
 	if fw.file != nil {
-		return fw.file.Close()
+		if err := fw.file.Close(); err != nil {
+			return fmt.Errorf("close log file: %w", err)
+		}
 	}
 	return nil
 }
@@ -396,13 +402,13 @@ func (fw *FileWriter) openFile() error {
 	// Create directory if needed
 	dir := filepath.Dir(fw.filename)
 	if err := os.MkdirAll(dir, 0750); err != nil {
-		return err
+		return fmt.Errorf("create log directory %s: %w", dir, err)
 	}
 
 	// Open file
 	file, err := os.OpenFile(fw.filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		return err
+		return fmt.Errorf("open log file %s: %w", fw.filename, err)
 	}
 
 	fw.file = file
@@ -413,7 +419,7 @@ func (fw *FileWriter) openFile() error {
 func (fw *FileWriter) rotate() error {
 	// Close current file
 	if err := fw.file.Close(); err != nil {
-		return err
+		return fmt.Errorf("close log file before rotation: %w", err)
 	}
 
 	// Rotate files
@@ -429,7 +435,7 @@ func (fw *FileWriter) rotate() error {
 
 	// Rename current file
 	if err := os.Rename(fw.filename, fw.filename+".1"); err != nil {
-		return err
+		return fmt.Errorf("rename log file %s -> %s: %w", fw.filename, fw.filename+".1", err)
 	}
 
 	// Open new file

@@ -372,7 +372,7 @@ func TestRetryOperation(t *testing.T) {
 		}()
 
 		err := RetryOperation(ctx, operation, config, shouldRetry)
-		assert.Equal(t, context.Canceled, err)
+		assert.ErrorIs(t, err, context.Canceled)
 	})
 }
 

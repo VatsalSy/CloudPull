@@ -277,7 +277,6 @@ test_cross_compilation() {
         "darwin/arm64"
         "linux/amd64"
         "linux/arm64"
-        "windows/amd64"
     )
 
     for platform in "${platforms[@]}"; do

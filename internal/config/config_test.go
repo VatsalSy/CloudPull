@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,10 +14,16 @@ import (
 
 func TestLoadDefaultConfig(t *testing.T) {
 	viper.Reset()
+	t.Setenv("CLOUDPULL_LOG_LEVEL", "")
+	t.Setenv("CLOUDPULL_SYNC_CHUNK_SIZE", "")
+	t.Setenv("CLOUDPULL_API_MAX_RETRIES", "")
+	t.Setenv("CLOUDPULL_SYNC_DEFAULT_DIRECTORY", "")
 	// Load an empty config file to ensure setViperDefaults are applied, then setDefaults.
 	// This simulates the application's typical load path when no user config file exists.
-	cfg, err := Load(filepath.Join(t.TempDir(), "non_existent_config.yaml"))
-	require.NoError(t, err, "Load() with non-existent path should not produce an error")
+	tempConfig := filepath.Join(t.TempDir(), "empty_config.yaml")
+	require.NoError(t, os.WriteFile(tempConfig, []byte(""), 0600))
+	cfg, err := Load(tempConfig)
+	require.NoError(t, err, "Load() with an empty config file should not produce an error")
 	require.NotNil(t, cfg, "Load() should return a non-nil Config object")
 
 	// Assert values based on setViperDefaults() followed by setDefaults()
@@ -25,7 +32,7 @@ func TestLoadDefaultConfig(t *testing.T) {
 	expectedDefaultDir := filepath.Join(homeDir, "CloudPull")
 	assert.Equal(t, expectedDefaultDir, cfg.Sync.DefaultDirectory, "Default Sync.DefaultDirectory is incorrect")
 	assert.Equal(t, "info", cfg.Log.Level, "Default Log.Level is incorrect")
-	assert.Equal(t, 3, cfg.API.MaxRetries, "Default API.MaxRetries is incorrect") // From setViperDefaults
+	assert.Equal(t, 3, cfg.API.MaxRetries, "Default API.MaxRetries is incorrect")     // From setViperDefaults
 	assert.Equal(t, "1MB", cfg.Sync.ChunkSize, "Default Sync.ChunkSize is incorrect") // From setViperDefaults
 }
 
@@ -83,16 +90,23 @@ api:
 
 func TestGetChunkSizeBytesRefined(t *testing.T) {
 	tests := []struct {
-		name     string
-		chunkStr string // Value to set in cfg.Sync.ChunkSize
-		expected int64
+		name      string
+		chunkStr  string // Value to set in cfg.Sync.ChunkSize
+		expected  int64
+		expectErr bool
 	}{
 		{name: "10KB", chunkStr: "10KB", expected: 10 * 1024},
 		{name: "2MB", chunkStr: "2MB", expected: 2 * 1024 * 1024},
 		{name: "1GB", chunkStr: "1GB", expected: 1 * 1024 * 1024 * 1024},
 		{name: "512 bytes as string", chunkStr: "512", expected: 512},
 		{name: "empty string (uses method's internal default 1MB)", chunkStr: "", expected: 1 * 1024 * 1024},
-		{name: "invalid unit", chunkStr: "10XX", expected: 10}, // fmt.Sscanf("10XX", "%d...", &val) yields val=10
+		{name: "whitespace only (uses method's internal default 1MB)", chunkStr: "   ", expected: 1 * 1024 * 1024},
+		{name: "lowercase with spaces", chunkStr: " 2 mb ", expected: 2 * 1024 * 1024},
+		{name: "leading zeros with unit", chunkStr: "0005MB", expected: 5 * 1024 * 1024},
+		{name: "leading zeros with spaces", chunkStr: " 0002 kb ", expected: 2 * 1024},
+		{name: "leading zeros without unit", chunkStr: "000512", expected: 512},
+		{name: "invalid unit", chunkStr: "10XX", expectErr: true},
+		{name: "zero value", chunkStr: "0MB", expectErr: true},
 		{name: "just number (bytes)", chunkStr: "2048", expected: 2048},
 	}
 
@@ -102,33 +116,37 @@ func TestGetChunkSizeBytesRefined(t *testing.T) {
 				Sync: SyncConfig{ChunkSize: tt.chunkStr},
 			}
 			actual, err := cfgForTest.GetChunkSizeBytes()
-			require.NoError(t, err) // Sscanf doesn't return error here, just 0 for value if parse fails
+			if tt.expectErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, actual)
 		})
 	}
 }
 
 func TestGetBandwidthLimitBytes(t *testing.T) {
-    tests := []struct {
-        name         string
-        syncBandwidthLimit int    // Value to set in cfg.Sync.BandwidthLimit (MB)
-        expected     int64
-    }{
-        {name: "10MBps", syncBandwidthLimit: 10, expected: 10 * 1024 * 1024},
-        {name: "2MBps", syncBandwidthLimit: 2, expected: 2 * 1024 * 1024},
-        {name: "0 (unlimited)", syncBandwidthLimit: 0, expected: 0},
-        {name: "-5 (unlimited)", syncBandwidthLimit: -5, expected: 0}, // Negative should also be unlimited
-    }
+	tests := []struct {
+		name               string
+		syncBandwidthLimit int // Value to set in cfg.Sync.BandwidthLimit (MB)
+		expected           int64
+	}{
+		{name: "10MBps", syncBandwidthLimit: 10, expected: 10 * 1024 * 1024},
+		{name: "2MBps", syncBandwidthLimit: 2, expected: 2 * 1024 * 1024},
+		{name: "0 (unlimited)", syncBandwidthLimit: 0, expected: 0},
+		{name: "-5 (unlimited)", syncBandwidthLimit: -5, expected: 0}, // Negative should also be unlimited
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            cfgForTest := &Config{
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfgForTest := &Config{
 				Sync: SyncConfig{BandwidthLimit: tt.syncBandwidthLimit},
 			}
-            actual := cfgForTest.GetBandwidthLimitBytes()
-            assert.Equal(t, tt.expected, actual)
-        })
-    }
+			actual := cfgForTest.GetBandwidthLimitBytes()
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
 }
 
 func TestLoadWithEnvOverrides(t *testing.T) {
@@ -160,7 +178,6 @@ api:
 	t.Setenv("CLOUDPULL_API_MAX_RETRIES", "7") // Not in file, will override default
 	t.Setenv("CLOUDPULL_NEW_SETTING_FROM_ENV", "env_value_specific")
 
-
 	// 3. Configure a new local viper instance
 	v := viper.New()
 
@@ -188,7 +205,8 @@ api:
 	err = v.ReadInConfig()
 	// If the file does not exist, viper.ReadInConfig() returns a specific error.
 	// We created it, so it should be read. If not, defaults + env would apply.
-	if _, ok := err.(viper.ConfigFileNotFoundError); ok && tempConfigFile != "" {
+	var notFoundErr viper.ConfigFileNotFoundError
+	if errors.As(err, &notFoundErr) && tempConfigFile != "" {
 		// This means the tempConfigFile was not found by viper, which is an error in test setup.
 		require.NoError(t, err, "Viper could not find the temp config file: "+tempConfigFile)
 	} else if err != nil {
@@ -204,7 +222,6 @@ api:
 	require.NoError(t, v.BindEnv("api.max_retries", "CLOUDPULL_API_MAX_RETRIES"))
 	// For NEW_SETTING_FROM_ENV, AutomaticEnv should handle it if it's not a nested key,
 	// or we can bind it too if needed: require.NoError(t, v.BindEnv("new_setting_from_env", "CLOUDPULL_NEW_SETTING_FROM_ENV"))
-
 
 	// Debug: Check viper's understanding of the values BEFORE LoadFromViper
 	assert.Equal(t, "debug", v.GetString("log.level"), "[Viper Direct] Log.Level should be from env 'debug'")
@@ -222,7 +239,7 @@ api:
 	// Viper's precedence: Env > File > Defaults set by v.SetDefault()
 	// Then, LoadFromViper calls setDefaults(cfg) which can alter zero-valued fields in cfg.
 
-	assert.Equal(t, "debug", cfg.Log.Level, "Log.Level should be from env 'debug'") // Env "debug" > File "info" > Default "default_info". setDefaults sets to "info" if empty.
+	assert.Equal(t, "debug", cfg.Log.Level, "Log.Level should be from env 'debug'")           // Env "debug" > File "info" > Default "default_info". setDefaults sets to "info" if empty.
 	assert.Equal(t, 10, cfg.Sync.MaxConcurrent, "Sync.MaxConcurrent should be from env '10'") // Env 10 > File 3 > Default 1. setDefaults sets to 3 if 0.
 
 	// API.RequestTimeout: Env (not set) > File 30 > Default 15. Not in setDefaults.
@@ -245,7 +262,7 @@ func TestSaveConfig(t *testing.T) {
 	viper.Set("sync.max_concurrent", 12)
 	viper.Set("api.request_timeout", 75)
 	// Set a value that would typically come from setViperDefaults
-	viper.SetDefault("api.max_retries", 3) // Ensure this default is active in global viper
+	viper.SetDefault("api.max_retries", 3)                        // Ensure this default is active in global viper
 	viper.Set("api.max_retries", viper.GetInt("api.max_retries")) // Explicitly set it so it's "in use"
 
 	// 2. Tell viper where to save this configuration
@@ -305,7 +322,7 @@ func TestConfigPathAndDataDir(t *testing.T) {
 
 	// Test cfg.GetDataDir()
 	// Load a default config to get a Config instance
-	cfg, err := Load(filepath.Join(t.TempDir(), "another_non_existent_config.yaml")) // Load with a path to trigger initViper once
+	cfg, err := LoadFromViper(viper.New())
 	require.NoError(t, err)
 	assert.Equal(t, expectedDefaultDataDir, cfg.GetDataDir(), "cfg.GetDataDir() is incorrect")
 }
@@ -318,7 +335,6 @@ func TestGenericGetters(t *testing.T) {
 	v.Set("mykey.durationsec", 5) // Stored as int (seconds) for GetDuration
 	v.Set("mykey.float", 12.34)
 	v.Set("mykey.bool", true)
-
 
 	// Apply some defaults to the local viper instance to mimic setViperDefaults
 	// This is important because LoadFromViper doesn't call setViperDefaults itself.
@@ -335,7 +351,7 @@ func TestGenericGetters(t *testing.T) {
 	assert.Equal(t, 123, cfg.GetInt("mykey.int"), "GetInt failed")
 	assert.Equal(t, 5*time.Second, cfg.GetDuration("mykey.durationsec"), "GetDuration failed") // time.Second will be resolved by import
 	assert.Equal(t, 12.34, cfg.GetFloat64("mykey.float"), "GetFloat64 failed")
-	assert.True(t, cfg.viper.GetBool("mykey.bool"), "GetBool (initial true) failed") // Use cfg.viper.GetBool
+	assert.True(t, cfg.GetBool("mykey.bool"), "GetBool (initial true) failed")
 
 	// For GetBool, viper's GetBool is quite flexible with string parsing ("true", "false", "1", "0")
 	// Here we set it as a proper boolean.
@@ -345,9 +361,8 @@ func TestGenericGetters(t *testing.T) {
 	// No need to reload into cfgAfterBool unless v was somehow disassociated from cfg.
 	// cfg.viper should still point to v.
 
-	assert.True(t, cfg.viper.GetBool("mykey.booltrue"), "GetBool (true) failed")  // Use cfg.viper.GetBool
-	assert.False(t, cfg.viper.GetBool("mykey.boolfalse"), "GetBool (false) failed") // Use cfg.viper.GetBool
-
+	assert.True(t, cfg.GetBool("mykey.booltrue"), "GetBool (true) failed")
+	assert.False(t, cfg.GetBool("mykey.boolfalse"), "GetBool (false) failed")
 
 	// Test GetInt64
 	v.Set("mykey.int64", int64(1234567890123))

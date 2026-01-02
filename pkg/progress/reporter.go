@@ -127,7 +127,7 @@ func (r *Reporter) Stop() {
 	r.reportProgress(r.tracker.GetSnapshot())
 
 	if r.format == OutputFormatTerminal && r.progressBar != nil {
-		r.progressBar.Finish()
+		_ = r.progressBar.Finish()
 	}
 }
 
@@ -148,7 +148,7 @@ func (r *Reporter) processUpdates(updates <-chan Update) {
 				r.reportError(update.Error)
 			case UpdateTypeState:
 				r.reportStateChange()
-			default:
+			case UpdateTypeFile, UpdateTypeBytes:
 				// Batch file/byte updates for performance
 				if r.format != OutputFormatTerminal {
 					r.updateMu.Lock()
@@ -213,10 +213,10 @@ func (r *Reporter) updateProgressBar(snapshot ProgressSnapshot) {
 	// Update progress
 	if snapshot.TotalBytes > 0 {
 		r.progressBar.ChangeMax64(snapshot.TotalBytes)
-		r.progressBar.Set64(snapshot.ProcessedBytes)
+		_ = r.progressBar.Set64(snapshot.ProcessedBytes)
 	} else if snapshot.TotalFiles > 0 {
 		r.progressBar.ChangeMax64(snapshot.TotalFiles)
-		r.progressBar.Set64(snapshot.ProcessedFiles)
+		_ = r.progressBar.Set64(snapshot.ProcessedFiles)
 	}
 }
 
@@ -226,6 +226,8 @@ func (r *Reporter) formatDescription(snapshot ProgressSnapshot) string {
 
 	// State indicator
 	switch snapshot.State {
+	case StateIdle:
+		parts = append(parts, "[blue]Idle[reset]")
 	case StateRunning:
 		parts = append(parts, "[cyan]Syncing[reset]")
 	case StatePaused:

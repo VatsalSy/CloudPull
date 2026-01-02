@@ -98,9 +98,12 @@ func (app *App) Initialize() error {
 	var output io.Writer = os.Stdout
 	outputPath := cfg.GetString("log.output")
 	if outputPath != "" && outputPath != "stdout" {
-		file, err := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-		if err != nil {
-			return errors.Wrap(err, "failed to open log file")
+		// Sanitize the log path to prevent path traversal (G304)
+		cleanPath := filepath.Clean(outputPath)
+		// #nosec G304 -- log output path is from trusted application config, not user input
+		file, fileErr := os.OpenFile(cleanPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+		if fileErr != nil {
+			return errors.Wrap(fileErr, "failed to open log file")
 		}
 		output = file
 	}
@@ -443,7 +446,9 @@ func (app *App) StartSync(ctx context.Context, folderID, outputDir string, optio
 	case <-ctx.Done():
 		// Context canceled (user interrupt)
 		app.logger.Info("Sync canceled")
-		app.syncEngine.Stop()
+		if err := app.syncEngine.Stop(); err != nil {
+			app.logger.Error(err, "Failed to stop sync engine")
+		}
 	}
 
 	app.mu.Lock()
@@ -493,7 +498,9 @@ func (app *App) StartSyncWithSession(ctx context.Context, folderID, outputDir st
 		case <-ctx.Done():
 			// Context canceled (user interrupt)
 			app.logger.Info("Sync canceled")
-			app.syncEngine.Stop()
+			if err := app.syncEngine.Stop(); err != nil {
+				app.logger.Error(err, "Failed to stop sync engine")
+			}
 		}
 
 		app.mu.Lock()
@@ -544,7 +551,9 @@ func (app *App) ResumeSync(ctx context.Context, sessionID string) error {
 	case <-ctx.Done():
 		// Context canceled (user interrupt)
 		app.logger.Info("Sync canceled")
-		app.syncEngine.Stop()
+		if err := app.syncEngine.Stop(); err != nil {
+			app.logger.Error(err, "Failed to stop sync engine")
+		}
 	}
 
 	app.mu.Lock()
@@ -581,6 +590,14 @@ func (app *App) GetLatestSession(ctx context.Context) (*state.Session, error) {
 
 	// Sessions are ordered by created_at DESC
 	return sessions[0], nil
+}
+
+// GetSessionByID returns a session by its ID using direct database lookup.
+func (app *App) GetSessionByID(ctx context.Context, sessionID string) (*state.Session, error) {
+	if app.stateManager == nil {
+		return nil, errors.Errorf("state manager not initialized")
+	}
+	return app.stateManager.Sessions().Get(ctx, sessionID)
 }
 
 // GetProgress returns current sync progress.
@@ -670,8 +687,16 @@ func (app *App) ensureReady() error {
 }
 
 func (app *App) handleSignals(cancel context.CancelFunc) {
+	app.handleSignalsWithReady(cancel, nil)
+}
+
+func (app *App) handleSignalsWithReady(cancel context.CancelFunc, ready chan<- struct{}) {
 	sigChan := make(chan os.Signal, 1)
 	app.setupSignalHandling(sigChan)
+
+	if ready != nil {
+		close(ready) // Signal that handlers are registered
+	}
 
 	select {
 	case sig := <-sigChan:

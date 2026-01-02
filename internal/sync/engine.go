@@ -26,6 +26,21 @@ import (
 	"github.com/VatsalSy/CloudPull/internal/state"
 )
 
+const (
+	// driveRootFolderID is the ID used to reference the root of Google Drive.
+	driveRootFolderID = "root"
+
+	engineStatusCompleted = "completed"
+	engineStatusPaused    = "paused"
+	engineStatusRunning   = "running"
+	engineStatusStopped   = "stopped"
+
+	// totalsUpdateInitialThreshold is the file count after which totals updates are throttled.
+	totalsUpdateInitialThreshold int64 = 100
+	// totalsUpdateInterval is the file count interval for throttled totals updates.
+	totalsUpdateInterval int64 = 1000
+)
+
 // Engine is the main sync orchestrator.
 type Engine struct {
 	ctx             context.Context
@@ -329,6 +344,13 @@ func (e *Engine) startSync(ctx context.Context) error {
 	e.progressTracker.OnEvent(func(event *ProgressEvent) {
 		// Log significant events
 		switch event.Type {
+		case ProgressEventFileStarted,
+			ProgressEventFileProgress,
+			ProgressEventFileCompleted,
+			ProgressEventFolderStarted,
+			ProgressEventFolderCompleted,
+			ProgressEventBandwidthUpdate:
+			// No-op: these can be very noisy at scale.
 		case ProgressEventFileFailed:
 			e.logger.Error(event.Error, "File download failed",
 				"file", event.ItemName,
@@ -473,85 +495,159 @@ func (e *Engine) startFolderWalk() error {
 	}
 	e.logger.Debug("Walker started successfully")
 
-	// Process walk results
-	go func() {
-		totalFiles := int64(0)
-		totalBytes := int64(0)
-		batchSize := 100
-		fileBatch := make([]*state.File, 0, batchSize)
+	go e.processWalkResults(resultChan)
 
-		for result := range resultChan {
-			if e.ctx.Err() != nil {
-				return
-			}
+	return nil
+}
 
-			// Check if paused
-			for e.isPaused {
-				select {
-				case <-e.ctx.Done():
-					return
-				case <-time.After(time.Second):
-					continue
-				}
-			}
+func (e *Engine) processWalkResults(resultChan <-chan *WalkResult) {
+	const batchSize = 100
 
-			// Handle errors
-			if result.Error != nil {
-				e.errorChan <- result.Error
-				continue
-			}
+	var totalFiles int64
+	var totalBytes int64
+	fileBatch := make([]*state.File, 0, batchSize)
 
-			// Process files
-			if len(result.Files) > 0 {
-				e.logger.Debug("Processing walk result",
-					"folder", result.Folder.Name,
-					"files_count", len(result.Files),
-					"total_files_so_far", totalFiles,
-				)
-
-				totalFiles += int64(len(result.Files))
-				for _, file := range result.Files {
-					totalBytes += file.Size
-					fileBatch = append(fileBatch, file)
-
-					// Schedule batch when full
-					if len(fileBatch) >= batchSize {
-						e.logger.Debug("Scheduling file batch",
-							"batch_size", len(fileBatch),
-							"total_scheduled", totalFiles,
-						)
-						e.downloader.ScheduleBatch(fileBatch)
-						fileBatch = make([]*state.File, 0, batchSize)
-					}
-				}
-			}
-
-			// Update totals immediately when we have files
-			if totalFiles > 0 && (totalFiles <= 100 || totalFiles%1000 == 0) {
-				e.progressTracker.SetTotals(totalFiles, totalBytes)
-				e.updateSessionTotals(totalFiles, totalBytes)
-			}
+	for result := range resultChan {
+		if e.ctx.Err() != nil {
+			return
 		}
 
-		// Schedule remaining files
-		if len(fileBatch) > 0 {
-			e.downloader.ScheduleBatch(fileBatch)
+		if !e.waitUntilResumed() {
+			return
 		}
 
-		// Final update
-		e.progressTracker.SetTotals(totalFiles, totalBytes)
-		e.updateSessionTotals(totalFiles, totalBytes)
+		if result.Error != nil {
+			e.errorChan <- result.Error
+			continue
+		}
 
-		e.logger.Info("Folder scan completed",
-			"folders", e.walker.GetStats().FoldersScanned,
-			"files", totalFiles,
-			"size", formatBytes(totalBytes),
-		)
+		var err error
+		totalFiles, totalBytes, fileBatch, err = e.addWalkResultFiles(result, totalFiles, totalBytes, fileBatch, batchSize)
+		if err != nil {
+			e.errorChan <- err
+		}
+		e.maybeUpdateTotals(totalFiles, totalBytes)
+	}
 
-		// Signal that walking is complete
-		e.walkingComplete = true
-		e.checkIfSyncComplete()
-	}()
+	if err := e.flushWalkFileBatch(fileBatch); err != nil {
+		e.errorChan <- err
+	}
+
+	// Final update
+	e.progressTracker.SetTotals(totalFiles, totalBytes)
+	e.updateSessionTotals(totalFiles, totalBytes)
+
+	e.logger.Info("Folder scan completed",
+		"folders", e.walker.GetStats().FoldersScanned,
+		"files", totalFiles,
+		"size", formatBytes(totalBytes),
+	)
+
+	// Signal that walking is complete (protected by mutex for thread safety)
+	e.mu.Lock()
+	e.walkingComplete = true
+	e.mu.Unlock()
+	e.checkIfSyncComplete()
+}
+
+func (e *Engine) waitUntilResumed() bool {
+	if e.ctx.Err() != nil {
+		return false
+	}
+
+	for {
+		// Read isPaused under lock for thread safety
+		e.mu.RLock()
+		paused := e.isPaused
+		e.mu.RUnlock()
+
+		if !paused {
+			return true
+		}
+
+		select {
+		case <-e.ctx.Done():
+			return false
+		case <-time.After(time.Second):
+		}
+	}
+}
+
+func (e *Engine) addWalkResultFiles(
+	result *WalkResult,
+	totalFiles, totalBytes int64,
+	fileBatch []*state.File,
+	batchSize int,
+) (int64, int64, []*state.File, error) {
+	if len(result.Files) == 0 {
+		return totalFiles, totalBytes, fileBatch, nil
+	}
+
+	e.logger.Debug("Processing walk result",
+		"folder", result.Folder.Name,
+		"files_count", len(result.Files),
+		"total_files_so_far", totalFiles,
+	)
+
+	totalFiles += int64(len(result.Files))
+	var scheduleErr error
+	for _, file := range result.Files {
+		totalBytes += file.Size
+		fileBatch = append(fileBatch, file)
+
+		if len(fileBatch) < batchSize {
+			continue
+		}
+
+		if err := e.scheduleFileBatch(fileBatch, totalFiles); err != nil {
+			if scheduleErr == nil {
+				scheduleErr = err
+			}
+			continue
+		}
+
+		fileBatch = make([]*state.File, 0, batchSize)
+	}
+
+	return totalFiles, totalBytes, fileBatch, scheduleErr
+}
+
+func (e *Engine) scheduleFileBatch(files []*state.File, totalScheduled int64) error {
+	e.logger.Debug("Scheduling file batch",
+		"batch_size", len(files),
+		"total_scheduled", totalScheduled,
+	)
+
+	if err := e.downloader.ScheduleBatch(files); err != nil {
+		e.logger.Error(err, "Failed to schedule batch")
+		return errors.Wrap(err, "failed to schedule batch")
+	}
+
+	return nil
+}
+
+func (e *Engine) maybeUpdateTotals(totalFiles, totalBytes int64) {
+	if totalFiles == 0 {
+		return
+	}
+
+	if totalFiles > totalsUpdateInitialThreshold && totalFiles%totalsUpdateInterval != 0 {
+		return
+	}
+
+	e.progressTracker.SetTotals(totalFiles, totalBytes)
+	e.updateSessionTotals(totalFiles, totalBytes)
+}
+
+func (e *Engine) flushWalkFileBatch(fileBatch []*state.File) error {
+	if len(fileBatch) == 0 {
+		return nil
+	}
+
+	if err := e.downloader.ScheduleBatch(fileBatch); err != nil {
+		e.logger.Error(err, "Failed to schedule remaining batch")
+		return errors.Wrap(err, "failed to schedule remaining batch")
+	}
 
 	return nil
 }
@@ -665,7 +761,9 @@ func (e *Engine) cleanup() {
 	}
 
 	if e.downloader != nil {
-		e.downloader.Stop()
+		if err := e.downloader.Stop(); err != nil {
+			e.logger.Error(err, "Failed to stop downloader")
+		}
 	}
 
 	// Save final checkpoint
@@ -681,7 +779,7 @@ func (e *Engine) cleanup() {
 func (e *Engine) createSession(ctx context.Context, rootFolderID, destinationPath string) (*state.Session, error) {
 	// Get root folder name
 	var rootFolderName string
-	if rootFolderID == "root" {
+	if rootFolderID == driveRootFolderID {
 		rootFolderName = "My Drive"
 	} else {
 		info, err := e.client.GetFile(ctx, rootFolderID)
@@ -736,63 +834,73 @@ func (e *Engine) handleFatalError(err error) {
 	e.cancel()
 }
 
+// isSyncCompleteLocked checks completion assuming the mutex is already held.
+// This avoids deadlock when called from getStatus() which is called from GetProgress()
+// while holding the RLock.
+func (e *Engine) isSyncCompleteLocked() bool {
+	if !e.walkingComplete {
+		return false
+	}
+
+	stats := e.progressTracker.GetStats()
+	if stats.TotalFiles <= 0 {
+		return false
+	}
+
+	totalProcessed := stats.CompletedFiles + stats.FailedFiles + stats.SkippedFiles
+	if totalProcessed < stats.TotalFiles {
+		return false
+	}
+
+	if e.downloader == nil {
+		return false
+	}
+
+	downloaderStats := e.downloader.GetStats()
+	return downloaderStats.ActiveDownloads == 0 && downloaderStats.WorkerPoolStats.QueuedTasks == 0
+}
+
+func (e *Engine) isSyncComplete() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.isSyncCompleteLocked()
+}
+
 // getStatus returns the current engine status.
+// Note: This function assumes the caller holds at least RLock on e.mu.
+// It uses isSyncCompleteLocked() to avoid recursive locking which would deadlock.
 func (e *Engine) getStatus() string {
 	if !e.isRunning {
-		return "stopped"
+		return engineStatusStopped
 	}
 	if e.isPaused {
-		return "paused"
+		return engineStatusPaused
 	}
 
-	// Check if sync is complete
-	if e.walkingComplete {
-		stats := e.progressTracker.GetStats()
-		totalProcessed := stats.CompletedFiles + stats.FailedFiles + stats.SkippedFiles
-		if totalProcessed >= stats.TotalFiles && stats.TotalFiles > 0 {
-			if e.downloader != nil {
-				downloaderStats := e.downloader.GetStats()
-				if downloaderStats.ActiveDownloads == 0 && downloaderStats.WorkerPoolStats.QueuedTasks == 0 {
-					return "completed"
-				}
-			}
-		}
+	if e.isSyncCompleteLocked() {
+		return engineStatusCompleted
 	}
 
-	return "running"
+	return engineStatusRunning
 }
 
 // checkIfSyncComplete checks if the sync is complete and cancels the context if so.
 func (e *Engine) checkIfSyncComplete() {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	// Check if walking is complete
-	if !e.walkingComplete {
+	if !e.isSyncComplete() {
 		return
 	}
 
-	// Check if all downloads are complete
 	stats := e.progressTracker.GetStats()
-	totalProcessed := stats.CompletedFiles + stats.FailedFiles + stats.SkippedFiles
+	e.logger.Info("All downloads complete, stopping sync engine",
+		"total_files", stats.TotalFiles,
+		"completed", stats.CompletedFiles,
+		"failed", stats.FailedFiles,
+		"skipped", stats.SkippedFiles,
+	)
 
-	if totalProcessed >= stats.TotalFiles && stats.TotalFiles > 0 {
-		// Check worker pool status
-		if e.downloader != nil {
-			downloaderStats := e.downloader.GetStats()
-			if downloaderStats.ActiveDownloads == 0 && downloaderStats.WorkerPoolStats.QueuedTasks == 0 {
-				e.logger.Info("All downloads complete, stopping sync engine",
-					"total_files", stats.TotalFiles,
-					"completed", stats.CompletedFiles,
-					"failed", stats.FailedFiles,
-					"skipped", stats.SkippedFiles,
-				)
-				// Cancel context to trigger shutdown
-				if e.cancel != nil {
-					e.cancel()
-				}
-			}
-		}
+	// Cancel context to trigger shutdown
+	if e.cancel != nil {
+		e.cancel()
 	}
 }
 

@@ -182,7 +182,9 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 			Message: "Set it anyway?",
 			Default: false,
 		}
-		survey.AskOne(prompt, &proceed)
+		if err := survey.AskOne(prompt, &proceed); err != nil {
+			return fmt.Errorf("failed to get user input: %w", err)
+		}
 		if !proceed {
 			return nil
 		}
@@ -247,14 +249,18 @@ func runConfigReset(cmd *cobra.Command, args []string) error {
 		Message: "Are you sure?",
 		Default: false,
 	}
-	survey.AskOne(prompt, &confirm)
+	if err := survey.AskOne(prompt, &confirm); err != nil {
+		return fmt.Errorf("failed to get user confirmation: %w", err)
+	}
 	if !confirm {
 		return nil
 	}
 
 	// Reset viper to defaults from the config package
 	viper.Reset()
-	config.Load() // This will set all defaults via setViperDefaults()
+	if _, err := config.Load(); err != nil {
+		return fmt.Errorf("failed to load config defaults: %w", err)
+	}
 
 	// Save configuration
 	configFile := viper.ConfigFileUsed()
@@ -326,7 +332,9 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Reload configuration
-	viper.ReadInConfig()
+	if err := viper.ReadInConfig(); err != nil {
+		return fmt.Errorf("failed to reload configuration: %w", err)
+	}
 	fmt.Println(color.GreenString("✓ Configuration reloaded"))
 
 	return nil

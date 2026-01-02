@@ -57,12 +57,12 @@ func (q *QueryBuilder) GetSessionProgress(ctx context.Context, sessionID string)
         COUNT(*) as total_folders,
         SUM(CASE WHEN status = 'scanned' THEN 1 ELSE 0 END) as scanned_folders
       FROM folders
-      WHERE session_id = $1
+      WHERE session_id = ?
     ),
     current_time AS (
       SELECT (julianday('now') - julianday(s.start_time)) * 86400 as elapsed_seconds
       FROM sessions s
-      WHERE s.id = $1
+      WHERE s.id = ?
     )
     SELECT
       s.id as session_id,
@@ -89,10 +89,10 @@ func (q *QueryBuilder) GetSessionProgress(ctx context.Context, sessionID string)
     FROM sessions s
     CROSS JOIN folder_stats fs
     CROSS JOIN current_time ct
-    WHERE s.id = $1`
+    WHERE s.id = ?`
 
 	var progress SessionProgress
-	err := q.db.GetContext(ctx, &progress, query, sessionID)
+	err := q.db.GetContext(ctx, &progress, query, sessionID, sessionID, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session progress: %w", err)
 	}
@@ -129,14 +129,14 @@ func (q *QueryBuilder) GetFolderTree(ctx context.Context, sessionID string, pare
       COALESCE((SELECT SUM(size) FROM files WHERE folder_id = f.id), 0) as total_size,
       COALESCE((SELECT SUM(bytes_downloaded) FROM files WHERE folder_id = f.id), 0) as downloaded_size
     FROM folders f
-    WHERE f.session_id = $1`
+    WHERE f.session_id = ?`
 
 	args := []interface{}{sessionID}
 
 	if parentID == nil {
 		query += " AND f.parent_id IS NULL"
 	} else {
-		query += " AND f.parent_id = $2"
+		query += " AND f.parent_id = ?"
 		args = append(args, *parentID)
 	}
 
@@ -153,12 +153,12 @@ func (q *QueryBuilder) GetFolderTree(ctx context.Context, sessionID string, pare
 
 // ErrorSummary represents error statistics.
 type ErrorSummary struct {
-	LastOccurred time.Time `db:"last_occurred" json:"last_occurred"`
-	ErrorType    string    `db:"error_type" json:"error_type"`
-	ErrorCode    string    `db:"error_code" json:"error_code,omitempty"`
-	ItemType     string    `db:"item_type" json:"item_type"`
-	Count        int64     `db:"count" json:"count"`
-	IsRetryable  bool      `db:"is_retryable" json:"is_retryable"`
+	LastOccurred string `db:"last_occurred" json:"last_occurred"`
+	ErrorType    string `db:"error_type" json:"error_type"`
+	ErrorCode    string `db:"error_code" json:"error_code,omitempty"`
+	ItemType     string `db:"item_type" json:"item_type"`
+	Count        int64  `db:"count" json:"count"`
+	IsRetryable  bool   `db:"is_retryable" json:"is_retryable"`
 }
 
 // GetErrorSummary retrieves error summary for a session.
@@ -166,13 +166,13 @@ func (q *QueryBuilder) GetErrorSummary(ctx context.Context, sessionID string) ([
 	query := `
     SELECT
       error_type,
-      error_code,
+      COALESCE(error_code, '') as error_code,
       item_type,
       COUNT(*) as count,
       MAX(created_at) as last_occurred,
       is_retryable
     FROM error_log
-    WHERE session_id = $1
+    WHERE session_id = ?
     GROUP BY error_type, error_code, item_type, is_retryable
     ORDER BY count DESC`
 
@@ -217,7 +217,7 @@ func (q *QueryBuilder) GetResumableState(ctx context.Context, sessionID string) 
 
 	// Count pending folders
 	err = q.db.GetContext(ctx, &state.PendingFolders,
-		"SELECT COUNT(*) FROM folders WHERE session_id = $1 AND status = $2",
+		"SELECT COUNT(*) FROM folders WHERE session_id = ? AND status = ?",
 		sessionID, FolderStatusPending)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count pending folders: %w", err)
@@ -225,7 +225,7 @@ func (q *QueryBuilder) GetResumableState(ctx context.Context, sessionID string) 
 
 	// Count pending files
 	err = q.db.GetContext(ctx, &state.PendingFiles,
-		"SELECT COUNT(*) FROM files WHERE session_id = $1 AND status IN ($2, $3)",
+		"SELECT COUNT(*) FROM files WHERE session_id = ? AND status IN (?, ?)",
 		sessionID, FileStatusPending, FileStatusDownloading)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count pending files: %w", err)
@@ -241,8 +241,8 @@ func (q *QueryBuilder) GetResumableState(ctx context.Context, sessionID string) 
       bytes_downloaded,
       ROUND(CAST(bytes_downloaded AS FLOAT) / size * 100, 2) as progress
     FROM files
-    WHERE session_id = $1
-      AND status = $2
+    WHERE session_id = ?
+      AND status = ?
       AND bytes_downloaded > 0
     ORDER BY bytes_downloaded DESC`
 
@@ -253,7 +253,7 @@ func (q *QueryBuilder) GetResumableState(ctx context.Context, sessionID string) 
 
 	// Count retryable failures
 	err = q.db.GetContext(ctx, &state.FailedRetryable,
-		"SELECT COUNT(*) FROM files WHERE session_id = $1 AND status = $2 AND download_attempts < 3",
+		"SELECT COUNT(*) FROM files WHERE session_id = ? AND status = ? AND download_attempts < 3",
 		sessionID, FileStatusFailed)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count retryable failures: %w", err)
@@ -317,7 +317,7 @@ func (q *QueryBuilder) FindDuplicates(ctx context.Context, sessionID string) ([]
       AND f1.name = f2.name
       AND f1.size = f2.size
       AND f1.id < f2.id
-    WHERE f1.session_id = $1
+    WHERE f1.session_id = ?
       AND (f1.md5_checksum IS NULL OR f1.md5_checksum = f2.md5_checksum)
     ORDER BY f1.size DESC`
 
@@ -337,10 +337,10 @@ func (q *QueryBuilder) SearchFiles(ctx context.Context, sessionID string, patter
 
 	query := `
     SELECT * FROM files
-    WHERE session_id = $1
-      AND name LIKE $2 ESCAPE '\'
+    WHERE session_id = ?
+      AND name LIKE ? ESCAPE '\'
     ORDER BY name
-    LIMIT $3`
+    LIMIT ?`
 
 	var files []*File
 	err := q.db.SelectContext(ctx, &files, query, sessionID, pattern, limit)
@@ -355,9 +355,9 @@ func (q *QueryBuilder) SearchFiles(ctx context.Context, sessionID string, patter
 func (q *QueryBuilder) GetLargeFiles(ctx context.Context, sessionID string, limit int) ([]*File, error) {
 	query := `
     SELECT * FROM files
-    WHERE session_id = $1
+    WHERE session_id = ?
     ORDER BY size DESC
-    LIMIT $2`
+    LIMIT ?`
 
 	var files []*File
 	err := q.db.SelectContext(ctx, &files, query, sessionID, limit)
@@ -374,7 +374,7 @@ func (q *QueryBuilder) GetOldestSessions(ctx context.Context, olderThan time.Dur
 
 	query := `
     SELECT * FROM sessions
-    WHERE created_at < $1
+    WHERE created_at < ?
     ORDER BY created_at ASC`
 
 	var sessions []*Session
@@ -392,8 +392,8 @@ func (q *QueryBuilder) CleanupOldSessions(ctx context.Context, olderThan time.Du
 
 	query := `
     DELETE FROM sessions
-    WHERE created_at < $1
-      AND status IN ($2, $3, $4)`
+    WHERE created_at < ?
+      AND status IN (?, ?, ?)`
 
 	result, err := q.db.ExecContext(ctx, query, cutoff,
 		SessionStatusCompleted, SessionStatusFailed, SessionStatusCancelled)
@@ -401,5 +401,9 @@ func (q *QueryBuilder) CleanupOldSessions(ctx context.Context, olderThan time.Du
 		return 0, fmt.Errorf("failed to cleanup old sessions: %w", err)
 	}
 
-	return result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	return rows, nil
 }
